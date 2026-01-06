@@ -1,23 +1,42 @@
-import logo from './logo.svg';
+import { useState } from 'react';
 import './App.css';
+import ThemeSelector from './components/ThemeSelector';
+import BottomNav from './components/BottomNav';
+import Home from './pages/Home';
+import Library from './pages/Library';
+import Sessions from './pages/Sessions';
+import Profile from './pages/Profile';
 
 function App() {
+  const [currentPage, setCurrentPage] = useState('home');
+
+  const renderPage = () => {
+    switch(currentPage) {
+      case 'home':
+        return <Home />;
+      case 'library':
+        return <Library />;
+      case 'sessions':
+        return <Sessions />;
+      case 'profile':
+        return <Profile />;
+      default:
+        return <Home />;
+    }
+  };
+
   return (
     <div className="App">
       <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
+        <h1>Pagebound</h1>
+        <p>Read together. Stay in sync. No spoilers.</p>
       </header>
+      
+<main className="App-main">
+  {renderPage()}
+</main>
+      
+      <BottomNav currentPage={currentPage} onNavigate={setCurrentPage} />
     </div>
   );
 }
