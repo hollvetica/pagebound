@@ -1,0 +1,123 @@
+.library-page {
+  padding: 20px;
+}
+
+.library-header {
+  margin-bottom: 20px;
+}
+
+.library-header h2 {
+  font-size: 1.8rem;
+  margin-bottom: 5px;
+}
+
+.library-header p {
+  font-size: 0.9rem;
+  color: var(--color-secondary);
+  margin: 0;
+}
+
+.add-book-toggle {
+  width: 100%;
+  padding: 15px;
+  margin-bottom: 20px;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: bold;
+  background: var(--color-primary);
+  color: var(--color-text);
+  border: 2px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-book-toggle:active {
+  transform: scale(0.98);
+}
+
+.library-shelves {
+  margin-top: 30px;
+}
+
+.shelf-section {
+  margin-bottom: 30px;
+}
+
+.shelf-section h3 {
+  font-size: 1.3rem;
+  margin-bottom: 15px;
+  color: var(--color-accent);
+  border-bottom: 2px solid var(--color-border);
+  padding-bottom: 8px;
+}
+
+.books-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 15px;
+}
+
+.book-card {
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+  border-radius: 8px;
+  padding: 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.book-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.book-card-cover {
+  width: 100%;
+  aspect-ratio: 2/3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 3rem;
+  margin-bottom: 10px;
+}
+
+.book-card-info h4 {
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+  color: var(--color-text);
+  line-height: 1.3;
+}
+
+.book-card-info p {
+  font-size: 0.8rem;
+  color: var(--color-secondary);
+  margin: 0;
+}
+
+.empty-library {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--color-text);
+  opacity: 0.7;
+}
+
+.empty-library p {
+  font-size: 1.1rem;
+  margin: 10px 0;
+}
+
+.empty-library p:first-child {
+  font-weight: bold;
+  font-size: 1.3rem;
+}
+
+.book-card-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+}
