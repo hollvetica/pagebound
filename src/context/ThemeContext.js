@@ -31,7 +31,7 @@ export const ThemeProvider = ({ children }) => {
   const applyThemeToDocument = (theme) => {
     const root = document.documentElement;
     
-    // Apply color variables
+    // Apply all color variables (this handles primary, secondary, background, etc.)
     Object.entries(theme.colors).forEach(([key, value]) => {
       root.style.setProperty(`--color-${key}`, value);
     });
@@ -40,9 +40,9 @@ export const ThemeProvider = ({ children }) => {
     root.style.setProperty('--font-heading', theme.fonts.heading);
     root.style.setProperty('--font-body', theme.fonts.body);
     
-    // Apply background image
-    root.style.setProperty('--background-image', `url(${theme.backgroundImage})`);
-    root.style.setProperty('--background-overlay', theme.backgroundOverlay);
+    // Apply background pattern variables (NEW - for SVG patterns)
+    root.style.setProperty('--background-pattern', theme.backgroundPattern);
+    root.style.setProperty('--background-size', theme.backgroundSize);
   };
 
   const changeTheme = (themeName) => {

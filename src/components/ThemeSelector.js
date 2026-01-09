@@ -2,6 +2,18 @@ import React from 'react';
 import { useTheme } from '../context/ThemeContext';
 import './ThemeSelector.css';
 
+// Theme icons mapping
+const themeIcons = {
+  fantasy: '🐉',
+  romance: '💕',
+  mystery: '🔍',
+  scifi: '🚀',
+  historical: '📜',
+  horror: '💀',
+  contemporary: '☕',
+  youngAdult: '⭐'
+};
+
 function ThemeSelector() {
   const { currentTheme, changeTheme, availableThemes } = useTheme();
 
@@ -15,7 +27,8 @@ function ThemeSelector() {
             className={`theme-option ${currentTheme === themeKey ? 'active' : ''}`}
             onClick={() => changeTheme(themeKey)}
           >
-            {availableThemes[themeKey].name}
+            <span className="theme-icon">{themeIcons[themeKey] || '📚'}</span>
+            <span className="theme-name">{availableThemes[themeKey].name}</span>
           </button>
         ))}
       </div>
