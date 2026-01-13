@@ -14,11 +14,11 @@ function BottomNav({ currentPage, onNavigate }) {
       {navItems.map((item) => (
         <button
           key={item.id}
-          className={`nav-item ${currentPage === item.id ? 'active' : ''}`}
+          className={`nav-btn ${currentPage === item.id ? 'active' : ''}`}
           onClick={() => onNavigate(item.id)}
         >
-          <span className="nav-icon">{item.icon}</span>
-          <span className="nav-label">{item.label}</span>
+          <span>{item.icon}</span>
+          <span>{item.label}</span>
         </button>
       ))}
     </nav>
