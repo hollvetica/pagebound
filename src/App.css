@@ -137,3 +137,68 @@
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
+
+/* Loading Container */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+  text-align: center;
+}
+
+.loading-container h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  font-family: var(--font-heading);
+  margin: 0 0 1rem 0;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.loading-container p {
+  color: var(--color-text);
+  font-size: 1.1rem;
+  opacity: 0.7;
+}
+
+/* Auth App Specific Styles */
+.auth-app .App-main {
+  padding-bottom: 2rem;
+}
+
+.auth-theme-selector {
+  padding: 2rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-card-bg);
+}
+
+/* Back to Profile Button */
+.back-to-profile {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-primary);
+  color: var(--color-background);
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: var(--font-heading);
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s;
+  z-index: 100;
+}
+
+.back-to-profile:hover {
+  opacity: 0.9;
+  transform: translateX(-50%) translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}

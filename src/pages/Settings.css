@@ -1,0 +1,188 @@
+.settings-page {
+  padding: 2rem 1rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.settings-page h2 {
+  color: var(--color-primary);
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  margin: 0 0 2rem 0;
+}
+
+.settings-section {
+  margin-bottom: 3rem;
+}
+
+.settings-section h3 {
+  color: var(--color-primary);
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.username-display {
+  background: var(--color-card);
+  border: 2px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.username-info label {
+  display: block;
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.current-username {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.current-username span {
+  color: var(--color-text);
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.edit-button {
+  background: transparent;
+  color: var(--color-primary);
+  border: 2px solid var(--color-primary);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: var(--font-heading);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-button:hover {
+  background: var(--color-primary);
+  color: var(--color-background);
+}
+
+.username-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.username-edit-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.username-edit-controls input {
+  padding: 0.75rem;
+  border: 2px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 1rem;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  transition: border-color 0.2s;
+}
+
+.username-edit-controls input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.button-group {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.save-button,
+.cancel-button {
+  flex: 1;
+  padding: 0.75rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: var(--font-heading);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.save-button {
+  background: var(--color-primary);
+  color: var(--color-background);
+  border: none;
+}
+
+.save-button:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.save-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancel-button {
+  background: transparent;
+  color: var(--color-text);
+  border: 2px solid var(--color-border);
+}
+
+.cancel-button:hover {
+  border-color: var(--color-text);
+}
+
+.username-note {
+  color: var(--color-text);
+  opacity: 0.7;
+  font-size: 0.85rem;
+  margin: 1rem 0 0 0;
+  line-height: 1.4;
+}
+
+.error-message {
+  background: rgba(220, 53, 69, 0.1);
+  border: 1px solid #dc3545;
+  color: #dc3545;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.success-message {
+  background: rgba(40, 167, 69, 0.1);
+  border: 1px solid #28a745;
+  color: #28a745;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .settings-page {
+    padding: 1.5rem 1rem;
+  }
+
+  .settings-page h2 {
+    font-size: 1.75rem;
+  }
+
+  .button-group {
+    flex-direction: column;
+  }
+
+  .save-button,
+  .cancel-button {
+    width: 100%;
+  }
+}

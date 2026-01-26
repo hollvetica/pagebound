@@ -1,0 +1,214 @@
+.admin-page {
+  padding: 2rem 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.admin-header {
+  margin-bottom: 2rem;
+}
+
+.admin-header h2 {
+  color: var(--color-primary);
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  margin: 0 0 0.5rem 0;
+}
+
+.admin-subtitle {
+  color: var(--color-text);
+  opacity: 0.7;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.access-denied {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.access-denied h2 {
+  color: var(--color-primary);
+  font-family: var(--font-heading);
+  margin-bottom: 1rem;
+}
+
+.access-denied p {
+  color: var(--color-text);
+  opacity: 0.7;
+}
+
+.loading-state {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-text);
+  opacity: 0.7;
+}
+
+.error-message {
+  background: rgba(220, 53, 69, 0.1);
+  border: 1px solid #dc3545;
+  color: #dc3545;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.success-message {
+  background: rgba(40, 167, 69, 0.1);
+  border: 1px solid #28a745;
+  color: #28a745;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.users-grid {
+  background: var(--color-card);
+  border: 2px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.grid-header {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 0.75fr 1fr;
+  background: var(--color-primary);
+  color: var(--color-background);
+  font-weight: 600;
+  padding: 1rem;
+  gap: 1rem;
+}
+
+.grid-row {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 0.75fr 1fr;
+  padding: 1rem;
+  gap: 1rem;
+  border-bottom: 1px solid var(--color-border);
+  align-items: center;
+}
+
+.grid-row:last-child {
+  border-bottom: none;
+}
+
+.grid-row:hover {
+  background: var(--color-background);
+}
+
+.grid-cell {
+  color: var(--color-text);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.super-admin-badge {
+  background: var(--color-accent);
+  color: var(--color-background);
+  font-size: 0.7rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.checkbox-container {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+}
+
+.checkbox-container input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.checkmark {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-background);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.checkbox-container input:checked ~ .checkmark {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.checkbox-container input:checked ~ .checkmark::after {
+  content: '✓';
+  color: var(--color-background);
+  font-weight: bold;
+  font-size: 1rem;
+}
+
+.checkbox-container input:disabled ~ .checkmark {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.reset-password-button {
+  background: transparent;
+  color: var(--color-primary);
+  border: 2px solid var(--color-primary);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: var(--font-heading);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.reset-password-button:hover {
+  background: var(--color-primary);
+  color: var(--color-background);
+}
+
+@media (max-width: 768px) {
+  .admin-page {
+    padding: 1.5rem 1rem;
+  }
+
+  .admin-header h2 {
+    font-size: 1.75rem;
+  }
+
+  .grid-header,
+  .grid-row {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .grid-header {
+    display: none;
+  }
+
+  .grid-cell {
+    padding: 0.5rem 0;
+  }
+
+  .grid-cell::before {
+    content: attr(data-label);
+    font-weight: 600;
+    margin-right: 0.5rem;
+    color: var(--color-primary);
+  }
+
+  .reset-password-button {
+    width: 100%;
+  }
+}
