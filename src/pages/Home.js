@@ -1,10 +1,27 @@
-import React from 'react';
-import { mockUser, mockActiveSessions, mockActivityFeed } from '../mockData';
+import React, { useState } from 'react';
+import { mockUser, mockActivityFeed } from '../mockData';
+import { useSession } from '../context/SessionContext';
 import ActiveSessions from '../components/ActiveSessions';
 import ActivityFeed from '../components/ActivityFeed';
+import QuickSessionSetup from '../components/QuickSessionSetup';
 import './Home.css';
 
 function Home() {
+  const { sessions, createSession } = useSession();
+  const [showQuickSetup, setShowQuickSetup] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState(null);
+
+  const handleSuggestSession = (activity) => {
+    setSelectedActivity(activity);
+    setShowQuickSetup(true);
+  };
+
+  const handleCreateQuickSession = (sessionData) => {
+    createSession(sessionData);
+    setShowQuickSetup(false);
+    setSelectedActivity(null);
+  };
+
   return (
     <div className="page home-page">
       <div className="home-header">
@@ -15,9 +32,30 @@ function Home() {
         </div>
       </div>
 
-      <ActiveSessions sessions={mockActiveSessions} />
+      {sessions.length > 0 ? (
+        <ActiveSessions sessions={sessions} />
+      ) : (
+        <div className="no-sessions">
+          <h3>No Active Sessions</h3>
+          <p>Start a reading session from your library or join a friend below!</p>
+        </div>
+      )}
       
-      <ActivityFeed activities={mockActivityFeed} />
+      <ActivityFeed 
+        activities={mockActivityFeed} 
+        onSuggestSession={handleSuggestSession}
+      />
+
+      {showQuickSetup && selectedActivity && (
+        <QuickSessionSetup
+          activity={selectedActivity}
+          onClose={() => {
+            setShowQuickSetup(false);
+            setSelectedActivity(null);
+          }}
+          onCreateSession={handleCreateQuickSession}
+        />
+      )}
     </div>
   );
 }

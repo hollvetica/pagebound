@@ -38,13 +38,16 @@ export const mockActivityFeed = [
     type: 'started_reading',
     friend: 'Sarah',
     book: 'The Shadow of the Wind',
-    timestamp: '1 hour ago'
+    bookIsbn: '9780143034902',
+    timestamp: '1 hour ago',
+    mutual: true // You also have this book
   },
   {
     id: 2,
     type: 'added_to_wishlist',
     friend: 'Jane',
     book: 'Project Hail Mary',
+    bookIsbn: '9780593135204',
     timestamp: '3 hours ago',
     mutual: true // You also have this book
   },
@@ -67,6 +70,7 @@ export const mockActivityFeed = [
     type: 'added_to_wishlist',
     friend: 'Carlos',
     book: 'The Priory of the Orange Tree',
+    bookIsbn: '9781408883464',
     timestamp: 'Yesterday',
     mutual: true
   }

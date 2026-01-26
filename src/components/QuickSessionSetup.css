@@ -1,0 +1,225 @@
+/* Quick Session Setup Modal */
+.quick-setup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+  padding: 1rem;
+}
+
+.quick-setup-modal {
+  background: linear-gradient(145deg, var(--color-card-bg) 0%, var(--color-surface) 100%);
+  border-radius: 20px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 
+    0 20px 40px rgba(0, 0, 0, 0.5),
+    0 8px 16px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  animation: slideUp 0.3s ease-out;
+}
+
+.quick-setup-modal h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-family: var(--font-heading);
+  color: var(--color-text);
+  margin: 0 0 1.5rem 0;
+  text-align: center;
+}
+
+.quick-setup-book {
+  padding: 1rem;
+  background: var(--color-surface);
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  border: 1px solid var(--color-border);
+}
+
+.book-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 0.5rem 0;
+}
+
+.suggestion-text {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.invited-section {
+  margin-bottom: 1.5rem;
+}
+
+.invited-section label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 0.75rem;
+}
+
+.invited-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.invited-chip {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.invited-chip button {
+  background: rgba(255, 255, 255, 0.3);
+  border: none;
+  color: white;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.invited-chip button:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.add-more-btn {
+  background: var(--color-surface);
+  border: 2px dashed var(--color-border);
+  color: var(--color-text);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.add-more-btn:hover {
+  border-color: var(--color-primary);
+  background: var(--color-background);
+}
+
+.friend-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.friend-chip {
+  background: var(--color-background);
+  border: 2px solid var(--color-border);
+  color: var(--color-text);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.friend-chip:hover {
+  background: var(--color-surface);
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+}
+
+.friend-chip.selected {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.quick-setup-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.cancel-button,
+.create-button {
+  padding: 1rem;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cancel-button {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 2px solid var(--color-border);
+}
+
+.cancel-button:hover {
+  background: var(--color-background);
+  transform: translateY(-2px);
+}
+
+.create-button {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  color: white;
+  box-shadow: 
+    0 4px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 2px rgba(255, 255, 255, 0.2);
+}
+
+.create-button:hover {
+  background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary));
+  transform: translateY(-2px);
+  box-shadow: 
+    0 6px 12px rgba(0, 0, 0, 0.4),
+    inset 0 1px 2px rgba(255, 255, 255, 0.2);
+}
+
+@media (max-width: 768px) {
+  .quick-setup-modal {
+    padding: 1.5rem;
+  }
+  
+  .quick-setup-modal h2 {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .quick-setup-actions {
+    grid-template-columns: 1fr;
+  }
+}

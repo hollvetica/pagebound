@@ -4,12 +4,10 @@ import './BookDetail.css';
 function BookDetail({ book, onClose, onStartSession, onUpdateBook }) {
   const [selectedShelf, setSelectedShelf] = useState(book.shelf || 'Want to Read');
   const [totalChapters, setTotalChapters] = useState(book.totalChapters || '');
-  const [totalPages, setTotalPages] = useState(book.totalPages || '');
   const [currentChapter, setCurrentChapter] = useState(book.currentChapter || 0);
   const [showSessionForm, setShowSessionForm] = useState(false);
   const [sessionName, setSessionName] = useState(book.title);
   const [invitedFriends, setInvitedFriends] = useState([]);
-  const [trackingMode, setTrackingMode] = useState('chapters');
   
   const shelves = ['Want to Read', 'Currently Reading', 'Finished'];
   const mockFriends = ['Sarah', 'Alex', 'Maya', 'Jordan', 'Riley'];
@@ -19,7 +17,6 @@ function BookDetail({ book, onClose, onStartSession, onUpdateBook }) {
       ...book,
       shelf: selectedShelf,
       totalChapters: totalChapters ? parseInt(totalChapters) : null,
-      totalPages: totalPages ? parseInt(totalPages) : null,
       currentChapter: selectedShelf === 'Currently Reading' ? currentChapter : 0
     };
     
@@ -39,26 +36,16 @@ function BookDetail({ book, onClose, onStartSession, onUpdateBook }) {
   };
 
   const handleCreateSession = () => {
-    if (!totalChapters && !totalPages) {
-      alert('Please set total chapters or total pages first!');
-      return;
-    }
-    
-    if (trackingMode === 'chapters' && !totalChapters) {
-      alert('Please set total chapters to track by chapters!');
-      return;
-    }
-    
-    if (trackingMode === 'pages' && !totalPages) {
-      alert('Please set total pages to track by pages!');
+    if (!totalChapters) {
+      alert('Please set total chapters first!');
       return;
     }
 
+    // Save book updates first
     const updatedBook = {
       ...book,
       shelf: selectedShelf,
-      totalChapters: parseInt(totalChapters) || null,
-      totalPages: parseInt(totalPages) || null,
+      totalChapters: parseInt(totalChapters),
       currentChapter: selectedShelf === 'Currently Reading' ? currentChapter : 0
     };
     
@@ -66,28 +53,25 @@ function BookDetail({ book, onClose, onStartSession, onUpdateBook }) {
       onUpdateBook(updatedBook);
     }
 
+    // Create session
     const newSession = {
       id: Date.now().toString(),
       bookTitle: book.title,
       bookAuthor: book.author,
       bookCover: book.coverUrl,
       bookIsbn: book.isbn,
-      totalChapters: totalChapters ? parseInt(totalChapters) : null,
-      totalPages: totalPages ? parseInt(totalPages) : null,
-      trackingMode: trackingMode,
+      totalChapters: parseInt(totalChapters),
       sessionName: sessionName,
       createdAt: new Date().toISOString(),
       participants: [
         {
           name: 'You',
           currentChapter: currentChapter || 0,
-          currentPage: 0,
           isHost: true
         },
         ...invitedFriends.map(friend => ({
           name: friend,
           currentChapter: 0,
-          currentPage: 0,
           isHost: false
         }))
       ]
@@ -146,25 +130,13 @@ function BookDetail({ book, onClose, onStartSession, onUpdateBook }) {
           <div className="chapter-input-section">
             <h3>Book Details</h3>
             <div className="input-group">
-              <label>Total Chapters (optional):</label>
+              <label>Total Chapters:</label>
               <input
                 type="number"
                 min="1"
                 placeholder="e.g., 24"
                 value={totalChapters}
                 onChange={(e) => setTotalChapters(e.target.value)}
-                className="chapter-input"
-              />
-            </div>
-
-            <div className="input-group">
-              <label>Total Pages (optional):</label>
-              <input
-                type="number"
-                min="1"
-                placeholder="e.g., 350"
-                value={totalPages}
-                onChange={(e) => setTotalPages(e.target.value)}
                 className="chapter-input"
               />
             </div>
@@ -199,37 +171,11 @@ function BookDetail({ book, onClose, onStartSession, onUpdateBook }) {
           </div>
         )}
 
+        {/* Session Creation Form - Shows when button clicked */}
         {showSessionForm && (
           <div className="session-form-section">
-            <h3>Reading Session Setup</h3>
+            <h3>Reading Session</h3>
             
-            <div className="input-group">
-              <label>Track Progress By:</label>
-              <div className="tracking-mode-selector">
-                <button
-                  type="button"
-                  className={`tracking-mode-btn ${trackingMode === 'chapters' ? 'active' : ''}`}
-                  onClick={() => setTrackingMode('chapters')}
-                  disabled={!totalChapters}
-                >
-                  📖 Chapters
-                  {!totalChapters && <span className="disabled-note">(Set chapters first)</span>}
-                </button>
-                <button
-                  type="button"
-                  className={`tracking-mode-btn ${trackingMode === 'pages' ? 'active' : ''}`}
-                  onClick={() => setTrackingMode('pages')}
-                  disabled={!totalPages}
-                >
-                  📄 Pages
-                  {!totalPages && <span className="disabled-note">(Set pages first)</span>}
-                </button>
-              </div>
-              <p className="tracking-note">
-                Everyone in this session will track progress by {trackingMode}.
-              </p>
-            </div>
-
             <div className="input-group">
               <label>Session Name:</label>
               <input
@@ -247,7 +193,6 @@ function BookDetail({ book, onClose, onStartSession, onUpdateBook }) {
                 {mockFriends.map(friend => (
                   <button
                     key={friend}
-                    type="button"
                     className={`friend-chip ${invitedFriends.includes(friend) ? 'selected' : ''}`}
                     onClick={() => handleToggleFriend(friend)}
                   >
@@ -286,6 +231,7 @@ function BookDetail({ book, onClose, onStartSession, onUpdateBook }) {
               <button 
                 className="primary-button" 
                 onClick={handleCreateSession}
+                disabled={!totalChapters}
               >
                 Create Session
               </button>

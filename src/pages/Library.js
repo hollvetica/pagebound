@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import BookSearch from '../components/BookSearch';
 import BookDetail from './BookDetail';
+import CreateSession from '../components/CreateSession';
+import { useSession } from '../context/SessionContext';
 import './Library.css';
 
 function Library() {
+  const { createSession } = useSession();
+  
   const [myBooks, setMyBooks] = useState([
     // Mock books already in library
     {
@@ -12,19 +16,22 @@ function Library() {
       author: 'Erin Morgenstern',
       coverUrl: null,
       shelf: 'Currently Reading',
-      currentChapter: 5
+      currentChapter: 5,
+      totalChapters: 15
     },
     {
       isbn: '9780525559474',
       title: 'Mexican Gothic',
       author: 'Silvia Moreno-Garcia',
       coverUrl: null,
-      shelf: 'Want to Read'
+      shelf: 'Want to Read',
+      totalChapters: 12
     }
   ]);
 
   const [showSearch, setShowSearch] = useState(false);
   const [selectedBook, setSelectedBook] = useState(null);
+  const [showCreateSession, setShowCreateSession] = useState(false);
 
   const handleAddBook = (book) => {
     // Check if book is already in library
@@ -47,16 +54,20 @@ function Library() {
   };
 
   const handleStartSession = (book) => {
-    console.log('Starting session for:', book.title);
-    // We'll build this feature next
-    alert('Reading session feature coming soon!');
+    setSelectedBook(null);
+    setShowCreateSession(true);
+  };
+
+  const handleCreateSession = (sessionData) => {
+    createSession(sessionData);
+    alert('Reading session created! Check your home page.');
   };
 
   const handleUpdateBook = (updatedBook) => {
-  setMyBooks(myBooks.map(book => 
-    book.isbn === updatedBook.isbn ? updatedBook : book
-  ));
-};
+    setMyBooks(myBooks.map(book => 
+      book.isbn === updatedBook.isbn ? updatedBook : book
+    ));
+  };
 
   const groupedBooks = myBooks.reduce((acc, book) => {
     if (!acc[book.shelf]) {
@@ -118,14 +129,22 @@ function Library() {
         </div>
       )}
 
-  {selectedBook && (
-  <BookDetail 
-    book={selectedBook}
-    onClose={handleCloseDetail}
-    onStartSession={handleStartSession}
-    onUpdateBook={handleUpdateBook}
-  />
-)}
+      {selectedBook && (
+        <BookDetail 
+          book={selectedBook}
+          onClose={handleCloseDetail}
+          onStartSession={handleStartSession}
+          onUpdateBook={handleUpdateBook}
+        />
+      )}
+
+      {showCreateSession && selectedBook && (
+        <CreateSession
+          book={selectedBook}
+          onClose={() => setShowCreateSession(false)}
+          onCreateSession={handleCreateSession}
+        />
+      )}
     </div>
   );
 }
