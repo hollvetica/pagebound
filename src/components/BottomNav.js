@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, BookOpen, Users, User } from 'lucide-react';
+import { Home, BookOpen, Users, User, UserPlus } from 'lucide-react';
 import './BottomNav.css';
 
 function BottomNav({ currentPage, onNavigate }) {
@@ -7,6 +7,7 @@ function BottomNav({ currentPage, onNavigate }) {
     { id: 'home', label: 'Home', icon: Home },
     { id: 'library', label: 'Library', icon: BookOpen },
     { id: 'sessions', label: 'Sessions', icon: Users },
+    { id: 'friends', label: 'Friends', icon: UserPlus },
     { id: 'profile', label: 'Profile', icon: User }
   ];
 

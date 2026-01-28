@@ -13,8 +13,9 @@ exports.handler = async (event) => {
   console.log('Received event:', JSON.stringify(event, null, 2));
 
   const email = event.request.userAttributes.email;
+  const userId = event.request.userAttributes.sub; // Cognito immutable user ID
   const username = event.request.userAttributes['custom:username'] || email.split('@')[0];
-  
+
   // Determine if this is the super admin
   const isAdmin = email === 'hollie.tanner@gmail.com';
 
@@ -24,10 +25,16 @@ exports.handler = async (event) => {
       TableName: process.env.USERS_TABLE,
       Item: {
         email: email,
+        userId: userId,
         username: username,
+        displayName: username,
+        bio: '',
+        avatarUrl: null,
+        isPrivate: false,
         isAdmin: isAdmin,
         createdAt: new Date().toISOString(),
-        friends: []
+        friendsCount: 0,
+        publicShelves: []
       }
     }));
 

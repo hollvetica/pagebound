@@ -1,0 +1,18 @@
+{
+  "TableName": "pagebound-invite-links",
+  "AttributeDefinitions": [
+    {"AttributeName": "inviteCode", "AttributeType": "S"},
+    {"AttributeName": "userId", "AttributeType": "S"}
+  ],
+  "KeySchema": [
+    {"AttributeName": "inviteCode", "KeyType": "HASH"}
+  ],
+  "GlobalSecondaryIndexes": [{
+    "IndexName": "userId-index",
+    "KeySchema": [
+      {"AttributeName": "userId", "KeyType": "HASH"}
+    ],
+    "Projection": {"ProjectionType": "ALL"}
+  }],
+  "BillingMode": "PAY_PER_REQUEST"
+}

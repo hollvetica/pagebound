@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(aws cloudformation describe-stacks:*)",
+      "Bash(aws dynamodb list-tables:*)",
+      "Bash(aws lambda list-functions:*)",
+      "Bash(aws sts get-caller-identity:*)",
+      "Bash(aws cloudformation describe-stack-resources:*)",
+      "Bash(aws cloudformation validate-template:*)",
+      "Bash(aws dynamodb update-time-to-live:*)",
+      "Bash(aws dynamodb wait:*)",
+      "Bash(aws dynamodb update-table:*)",
+      "Bash(aws dynamodb describe-table:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(aws lambda create-function:*)",
+      "Bash(powershell -Command \"Remove-Item index.js,friendsAPI.zip -Force\")",
+      "Bash(aws iam get-role:*)",
+      "Bash(aws lambda update-function-code:*)",
+      "Bash(npm install:*)",
+      "Bash(node scripts/migrate-users-add-userId.js:*)",
+      "Bash(aws cognito-idp list-users:*)",
+      "Bash(aws dynamodb scan:*)",
+      "Bash(aws apigateway get-rest-apis:*)",
+      "Bash(aws apigateway get-resources:*)",
+      "Bash(aws apigateway get-stage:*)"
+    ]
+  }
+}

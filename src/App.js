@@ -6,6 +6,8 @@ import BottomNav from './components/BottomNav';
 import Home from './pages/Home';
 import Library from './pages/Library';
 import Sessions from './pages/Sessions';
+import Friends from './pages/Friends';
+import FriendProfile from './pages/FriendProfile';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
@@ -16,7 +18,13 @@ import PasswordReset from './pages/PasswordReset';
 function App() {
   const [currentPage, setCurrentPage] = useState('home');
   const [authPage, setAuthPage] = useState('login'); // 'login', 'signup', or 'reset'
+  const [selectedFriendId, setSelectedFriendId] = useState(null);
   const { user, loading } = useAuth();
+
+  const handleViewFriendProfile = (friendId) => {
+    setSelectedFriendId(friendId);
+    setCurrentPage('friendProfile');
+  };
 
   const renderPage = () => {
     switch(currentPage) {
@@ -26,8 +34,12 @@ function App() {
         return <Library />;
       case 'sessions':
         return <Sessions />;
+      case 'friends':
+        return <Friends onNavigateToFriendProfile={handleViewFriendProfile} />;
+      case 'friendProfile':
+        return <FriendProfile friendUserId={selectedFriendId} />;
       case 'profile':
-        return <Profile 
+        return <Profile
           onNavigateToSettings={() => setCurrentPage('settings')}
           onNavigateToAdmin={() => setCurrentPage('admin')}
         />;
@@ -94,15 +106,22 @@ function App() {
         {renderPage()}
       </main>
       
-      {/* Only show bottom nav on main pages, not settings/admin */}
-      {!['settings', 'admin'].includes(currentPage) && (
+      {/* Only show bottom nav on main pages, not settings/admin/friendProfile */}
+      {!['settings', 'admin', 'friendProfile'].includes(currentPage) && (
         <BottomNav currentPage={currentPage} onNavigate={setCurrentPage} />
       )}
-      
+
       {/* Back button for settings and admin */}
       {['settings', 'admin'].includes(currentPage) && (
         <button className="back-to-profile" onClick={() => setCurrentPage('profile')}>
           ← Back to Profile
+        </button>
+      )}
+
+      {/* Back button for friend profile */}
+      {currentPage === 'friendProfile' && (
+        <button className="back-to-profile" onClick={() => setCurrentPage('friends')}>
+          ← Back to Friends
         </button>
       )}
     </div>

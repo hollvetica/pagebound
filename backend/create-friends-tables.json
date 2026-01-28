@@ -1,0 +1,20 @@
+{
+  "TableName": "pagebound-friends",
+  "AttributeDefinitions": [
+    {"AttributeName": "userId", "AttributeType": "S"},
+    {"AttributeName": "friendUserId", "AttributeType": "S"}
+  ],
+  "KeySchema": [
+    {"AttributeName": "userId", "KeyType": "HASH"},
+    {"AttributeName": "friendUserId", "KeyType": "RANGE"}
+  ],
+  "GlobalSecondaryIndexes": [{
+    "IndexName": "friendUserId-index",
+    "KeySchema": [
+      {"AttributeName": "friendUserId", "KeyType": "HASH"},
+      {"AttributeName": "userId", "KeyType": "RANGE"}
+    ],
+    "Projection": {"ProjectionType": "ALL"}
+  }],
+  "BillingMode": "PAY_PER_REQUEST"
+}

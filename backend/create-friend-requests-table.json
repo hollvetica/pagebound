@@ -1,0 +1,31 @@
+{
+  "TableName": "pagebound-friend-requests",
+  "AttributeDefinitions": [
+    {"AttributeName": "toUserId", "AttributeType": "S"},
+    {"AttributeName": "fromUserId", "AttributeType": "S"},
+    {"AttributeName": "status", "AttributeType": "S"}
+  ],
+  "KeySchema": [
+    {"AttributeName": "toUserId", "KeyType": "HASH"},
+    {"AttributeName": "fromUserId", "KeyType": "RANGE"}
+  ],
+  "GlobalSecondaryIndexes": [
+    {
+      "IndexName": "fromUserId-index",
+      "KeySchema": [
+        {"AttributeName": "fromUserId", "KeyType": "HASH"},
+        {"AttributeName": "toUserId", "KeyType": "RANGE"}
+      ],
+      "Projection": {"ProjectionType": "ALL"}
+    },
+    {
+      "IndexName": "status-index",
+      "KeySchema": [
+        {"AttributeName": "toUserId", "KeyType": "HASH"},
+        {"AttributeName": "status", "KeyType": "RANGE"}
+      ],
+      "Projection": {"ProjectionType": "ALL"}
+    }
+  ],
+  "BillingMode": "PAY_PER_REQUEST"
+}

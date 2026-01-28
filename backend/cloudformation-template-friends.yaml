@@ -1,0 +1,608 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Pagebound Friends Feature Infrastructure - Extended Template'
+
+Resources:
+  # ========================================
+  # DynamoDB Tables
+  # ========================================
+
+  # Existing Users Table (unchanged)
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: pagebound-users
+      AttributeDefinitions:
+        - AttributeName: email
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: username
+          AttributeType: S
+      KeySchema:
+        - AttributeName: email
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: userId-index
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: username-index
+          KeySchema:
+            - AttributeName: username
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+
+  # NEW: Friends Table
+  FriendsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: pagebound-friends
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: friendUserId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: friendUserId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: friendUserId-index
+          KeySchema:
+            - AttributeName: friendUserId
+              KeyType: HASH
+            - AttributeName: userId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+
+  # NEW: Friend Requests Table
+  FriendRequestsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: pagebound-friend-requests
+      AttributeDefinitions:
+        - AttributeName: toUserId
+          AttributeType: S
+        - AttributeName: fromUserId
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: toUserId
+          KeyType: HASH
+        - AttributeName: fromUserId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: fromUserId-index
+          KeySchema:
+            - AttributeName: fromUserId
+              KeyType: HASH
+            - AttributeName: toUserId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: status-index
+          KeySchema:
+            - AttributeName: toUserId
+              KeyType: HASH
+            - AttributeName: status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+
+  # NEW: Invite Links Table
+  InviteLinksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: pagebound-invite-links
+      AttributeDefinitions:
+        - AttributeName: inviteCode
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: inviteCode
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: userId-index
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      BillingMode: PAY_PER_REQUEST
+
+  # ========================================
+  # Cognito User Pool (unchanged)
+  # ========================================
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: pagebound-users
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 6
+          RequireUppercase: false
+          RequireLowercase: false
+          RequireNumbers: false
+          RequireSymbols: false
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: false
+        - Name: username
+          AttributeDataType: String
+          Mutable: true
+          Required: false
+      LambdaConfig:
+        PostConfirmation: !GetAtt PostConfirmationFunction.Arn
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: pagebound-web
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
+  # ========================================
+  # IAM Roles (UPDATED with new table access)
+  # ========================================
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                Resource:
+                  - !GetAtt UsersTable.Arn
+                  - !Sub '${UsersTable.Arn}/index/*'
+                  - !GetAtt FriendsTable.Arn
+                  - !Sub '${FriendsTable.Arn}/index/*'
+                  - !GetAtt FriendRequestsTable.Arn
+                  - !Sub '${FriendRequestsTable.Arn}/index/*'
+                  - !GetAtt InviteLinksTable.Arn
+                  - !Sub '${InviteLinksTable.Arn}/index/*'
+        - PolicyName: SESAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+        - PolicyName: CognitoAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cognito-idp:AdminResetUserPassword
+                  - cognito-idp:AdminGetUser
+                Resource: !GetAtt UserPool.Arn
+
+  # ========================================
+  # Lambda Functions
+  # ========================================
+
+  PostConfirmationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: pagebound-post-confirmation
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 10
+      Environment:
+        Variables:
+          USERS_TABLE: !Ref UsersTable
+      Code:
+        ZipFile: |
+          // Placeholder - replace with actual code during deployment
+          exports.handler = async (event) => { return event; };
+
+  PostConfirmationPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PostConfirmationFunction
+      Principal: cognito-idp.amazonaws.com
+      Action: lambda:InvokeFunction
+      SourceArn: !GetAtt UserPool.Arn
+
+  UserAPIFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: pagebound-user-api
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          USERS_TABLE: !Ref UsersTable
+          USER_POOL_ID: !Ref UserPool
+      Code:
+        ZipFile: |
+          // Placeholder - replace with actual code during deployment
+          exports.handler = async (event) => { return { statusCode: 200, body: '{}' }; };
+
+  # NEW: Friends API Lambda Function
+  FriendsAPIFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: pagebound-friends-api
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          USERS_TABLE: !Ref UsersTable
+          FRIENDS_TABLE: !Ref FriendsTable
+          FRIEND_REQUESTS_TABLE: !Ref FriendRequestsTable
+          INVITE_LINKS_TABLE: !Ref InviteLinksTable
+      Code:
+        ZipFile: |
+          // Placeholder - replace with actual code during deployment
+          exports.handler = async (event) => { return { statusCode: 200, body: '{}' }; };
+
+  # ========================================
+  # API Gateway
+  # ========================================
+
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: pagebound-api
+      Description: Pagebound User API
+
+  # CORS Configuration for API Gateway
+  ApiGatewayGatewayResponse:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResponseType: DEFAULT_4XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+
+  # /users resource
+  UsersResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: users
+
+  # /users/{email}
+  UserEmailResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref UsersResource
+      PathPart: '{email}'
+
+  # GET /users/{email}
+  GetUserMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref UserEmailResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UserAPIFunction.Arn}/invocations
+
+  # NEW: /friends resource
+  FriendsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: friends
+
+  # NEW: /friends/{userId}
+  FriendsUserIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref FriendsResource
+      PathPart: '{userId}'
+
+  # NEW: /friends/{userId}/list
+  FriendsListResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref FriendsUserIdResource
+      PathPart: list
+
+  # NEW: GET /friends/{userId}/list
+  GetFriendsListMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref FriendsListResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FriendsAPIFunction.Arn}/invocations
+
+  # NEW: /friends/{userId}/requests
+  FriendRequestsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref FriendsUserIdResource
+      PathPart: requests
+
+  # NEW: GET /friends/{userId}/requests (get pending requests)
+  GetFriendRequestsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref FriendRequestsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FriendsAPIFunction.Arn}/invocations
+
+  # NEW: POST /friends/{userId}/requests (send friend request)
+  PostFriendRequestMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref FriendRequestsResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FriendsAPIFunction.Arn}/invocations
+
+  # NEW: /friends/{userId}/requests/{fromUserId}
+  FriendRequestDetailResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref FriendRequestsResource
+      PathPart: '{fromUserId}'
+
+  # NEW: PUT /friends/{userId}/requests/{fromUserId} (accept/reject request)
+  PutFriendRequestMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref FriendRequestDetailResource
+      HttpMethod: PUT
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FriendsAPIFunction.Arn}/invocations
+
+  # NEW: /friends/{userId}/remove/{friendUserId}
+  RemoveFriendResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref FriendsUserIdResource
+      PathPart: remove
+
+  RemoveFriendDetailResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref RemoveFriendResource
+      PathPart: '{friendUserId}'
+
+  # NEW: DELETE /friends/{userId}/remove/{friendUserId}
+  DeleteFriendMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref RemoveFriendDetailResource
+      HttpMethod: DELETE
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FriendsAPIFunction.Arn}/invocations
+
+  # NEW: /friends/{userId}/search
+  FriendSearchResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref FriendsUserIdResource
+      PathPart: search
+
+  # NEW: GET /friends/{userId}/search?q=username
+  GetFriendSearchMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref FriendSearchResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FriendsAPIFunction.Arn}/invocations
+
+  # NEW: /friends/{userId}/invite
+  InviteResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref FriendsUserIdResource
+      PathPart: invite
+
+  # NEW: POST /friends/{userId}/invite (create invite link)
+  PostInviteLinkMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref InviteResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FriendsAPIFunction.Arn}/invocations
+
+  # NEW: GET /friends/{userId}/invite/{inviteCode}
+  InviteCodeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref InviteResource
+      PathPart: '{inviteCode}'
+
+  GetInviteLinkMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref InviteCodeResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FriendsAPIFunction.Arn}/invocations
+
+  # Lambda Permissions
+  ApiGatewayInvokeUserAPIPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UserAPIFunction
+      Principal: apigateway.amazonaws.com
+      Action: lambda:InvokeFunction
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*
+
+  ApiGatewayInvokeFriendsAPIPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref FriendsAPIFunction
+      Principal: apigateway.amazonaws.com
+      Action: lambda:InvokeFunction
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*
+
+  # API Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - GetUserMethod
+      - GetFriendsListMethod
+      - GetFriendRequestsMethod
+      - PostFriendRequestMethod
+      - PutFriendRequestMethod
+      - DeleteFriendMethod
+      - GetFriendSearchMethod
+      - PostInviteLinkMethod
+      - GetInviteLinkMethod
+    Properties:
+      RestApiId: !Ref ApiGateway
+      StageName: prod
+
+# ========================================
+# Outputs
+# ========================================
+
+Outputs:
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+    Export:
+      Name: PageboundUserPoolId
+
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref UserPoolClient
+    Export:
+      Name: PageboundUserPoolClientId
+
+  ApiEndpoint:
+    Description: API Gateway Endpoint
+    Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod
+    Export:
+      Name: PageboundApiEndpoint
+
+  UsersTableName:
+    Description: DynamoDB Users Table Name
+    Value: !Ref UsersTable
+    Export:
+      Name: PageboundUsersTable
+
+  FriendsTableName:
+    Description: DynamoDB Friends Table Name
+    Value: !Ref FriendsTable
+    Export:
+      Name: PageboundFriendsTable
+
+  FriendRequestsTableName:
+    Description: DynamoDB Friend Requests Table Name
+    Value: !Ref FriendRequestsTable
+    Export:
+      Name: PageboundFriendRequestsTable
+
+  InviteLinksTableName:
+    Description: DynamoDB Invite Links Table Name
+    Value: !Ref InviteLinksTable
+    Export:
+      Name: PageboundInviteLinksTable
+
+  FriendsAPIFunctionArn:
+    Description: Friends API Lambda Function ARN
+    Value: !GetAtt FriendsAPIFunction.Arn
+    Export:
+      Name: PageboundFriendsAPIArn

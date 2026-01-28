@@ -43,10 +43,11 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       
       // Check if username is available
-      const isAvailable = await checkUsernameAvailable(username);
-      if (!isAvailable) {
-        return { success: false, error: 'Username already taken' };
-      }
+      // Skip username check - will validate during signup
+      //const isAvailable = await checkUsernameAvailable(username);
+      //if (!isAvailable) {
+      //  return { success: false, error: 'Username already taken' };
+      //}
 
       const { isSignUpComplete, userId, nextStep } = await signUp({
         username: email,
@@ -59,7 +60,8 @@ export const AuthProvider = ({ children }) => {
       });
 
       // Create user profile in DynamoDB
-      await createUserProfile(email, username);
+      // User profile will be created by Lambda post-confirmation trigger
+      // await createUserProfile(email, username);
 
       return { 
         success: true, 
