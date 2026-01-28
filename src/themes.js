@@ -1,6 +1,7 @@
 export const themes = {
   fantasy: {
     name: 'Fantasy',
+    ratingIcon: '⭐',
     colors: {
       primary: '#7c3aed',
       primaryDark: '#5b21b6',
@@ -24,6 +25,7 @@ export const themes = {
   
   romance: {
     name: 'Romance',
+    ratingIcon: '💕',
     colors: {
       primary: '#ec4899',
       primaryDark: '#db2777',
@@ -47,6 +49,7 @@ export const themes = {
   
   mystery: {
     name: 'Mystery',
+    ratingIcon: '🔍',
     colors: {
       primary: '#d97706',
       primaryDark: '#b45309',
@@ -70,6 +73,7 @@ export const themes = {
   
   scifi: {
     name: 'Sci-Fi',
+    ratingIcon: '✨',
     colors: {
       primary: '#06b6d4',
       primaryDark: '#0891b2',
@@ -93,6 +97,7 @@ export const themes = {
   
   historical: {
     name: 'Historical',
+    ratingIcon: '🖋️',
     colors: {
       primary: '#8b6f47',
       primaryDark: '#6d5638',
@@ -116,6 +121,7 @@ export const themes = {
   
   horror: {
     name: 'Horror',
+    ratingIcon: '🔪',
     colors: {
       primary: '#8b3a3a',
       primaryDark: '#6b2828',
@@ -139,6 +145,7 @@ export const themes = {
   
   contemporary: {
     name: 'Contemporary',
+    ratingIcon: '⭐',
     colors: {
       primary: '#0891b2',
       primaryDark: '#0e7490',
@@ -162,6 +169,7 @@ export const themes = {
   
   youngAdult: {
     name: 'Young Adult',
+    ratingIcon: '☕',
     colors: {
       primary: '#f59e0b',
       primaryDark: '#d97706',

@@ -1,0 +1,71 @@
+/* Book Rating Container */
+.book-rating {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Rating Icon */
+.rating-icon {
+  transition: var(--transition);
+  user-select: none;
+  display: inline-block;
+}
+
+/* Interactive Rating */
+.book-rating.interactive .rating-icon {
+  cursor: pointer;
+}
+
+.book-rating.interactive .rating-icon:hover {
+  transform: scale(1.2);
+}
+
+.book-rating.interactive .rating-icon:active {
+  transform: scale(1.1);
+}
+
+/* Filled vs Empty */
+.rating-icon.filled {
+  opacity: 1;
+  filter: grayscale(0%);
+}
+
+.rating-icon.empty {
+  opacity: 0.3;
+  filter: grayscale(100%);
+}
+
+/* Size Variants */
+.book-rating.small .rating-icon {
+  font-size: 0.75rem;
+}
+
+.book-rating.medium .rating-icon {
+  font-size: 1rem;
+}
+
+.book-rating.large .rating-icon {
+  font-size: 1.5rem;
+}
+
+/* Static (non-interactive) rating */
+.book-rating.static .rating-icon {
+  cursor: default;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .book-rating.small .rating-icon {
+    font-size: 0.65rem;
+  }
+
+  .book-rating.medium .rating-icon {
+    font-size: 0.875rem;
+  }
+
+  .book-rating.large .rating-icon {
+    font-size: 1.25rem;
+  }
+}

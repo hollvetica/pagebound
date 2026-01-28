@@ -1,12 +1,30 @@
 import React, { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import BookSearch from '../components/BookSearch';
 import BookDetail from './BookDetail';
 import CreateSession from '../components/CreateSession';
+import BookRating from '../components/BookRating';
 import { useSession } from '../context/SessionContext';
+import { useTheme } from '../context/ThemeContext';
 import './Library.css';
 
 function Library() {
   const { createSession } = useSession();
+  const { currentTheme } = useTheme();
+
+  // Track shelf visibility (public/private)
+  const [shelfVisibility, setShelfVisibility] = useState({
+    'Currently Reading': true,
+    'Want to Read': true,
+    'Read': true
+  });
+
+  const toggleShelfVisibility = (shelfName) => {
+    setShelfVisibility(prev => ({
+      ...prev,
+      [shelfName]: !prev[shelfName]
+    }));
+  };
   
   const [myBooks, setMyBooks] = useState([
     // Mock books already in library
@@ -17,7 +35,11 @@ function Library() {
       coverUrl: null,
       shelf: 'Currently Reading',
       currentChapter: 5,
-      totalChapters: 15
+      totalChapters: 15,
+      progress: 33, // percentage
+      friendsReading: 3,
+      hasMessage: true,
+      rating: 0
     },
     {
       isbn: '9780525559474',
@@ -25,11 +47,13 @@ function Library() {
       author: 'Silvia Moreno-Garcia',
       coverUrl: null,
       shelf: 'Want to Read',
-      totalChapters: 12
+      totalChapters: 12,
+      friendsReading: 1,
+      hasMessage: false,
+      rating: 0
     }
   ]);
 
-  const [showSearch, setShowSearch] = useState(false);
   const [selectedBook, setSelectedBook] = useState(null);
   const [showCreateSession, setShowCreateSession] = useState(false);
 
@@ -42,7 +66,6 @@ function Library() {
 
     // Add book to library with default shelf
     setMyBooks([...myBooks, { ...book, shelf: 'Want to Read' }]);
-    setShowSearch(false);
   };
 
   const handleBookClick = (book) => {
@@ -64,8 +87,14 @@ function Library() {
   };
 
   const handleUpdateBook = (updatedBook) => {
-    setMyBooks(myBooks.map(book => 
+    setMyBooks(myBooks.map(book =>
       book.isbn === updatedBook.isbn ? updatedBook : book
+    ));
+  };
+
+  const handleRatingChange = (isbn, newRating) => {
+    setMyBooks(myBooks.map(book =>
+      book.isbn === isbn ? { ...book, rating: newRating } : book
     ));
   };
 
@@ -84,23 +113,33 @@ function Library() {
         <p>{myBooks.length} books</p>
       </div>
 
-      <button 
-        className="add-book-toggle"
-        onClick={() => setShowSearch(!showSearch)}
-      >
-        {showSearch ? '✕ Cancel' : '+ Add Book'}
-      </button>
-
-      {showSearch && <BookSearch onBookSelect={handleAddBook} />}
+      <BookSearch onBookSelect={handleAddBook} />
 
       <div className="library-shelves">
         {Object.keys(groupedBooks).map((shelfName) => (
           <div key={shelfName} className="shelf-section">
-            <h3>{shelfName}</h3>
+            <div className="shelf-header">
+              <h3>{shelfName}</h3>
+              <button
+                className="shelf-visibility-toggle"
+                onClick={() => toggleShelfVisibility(shelfName)}
+                title={shelfVisibility[shelfName] ? 'Make Private' : 'Make Public'}
+              >
+                {shelfVisibility[shelfName] ? (
+                  <>
+                    <Eye size={16} /> Public
+                  </>
+                ) : (
+                  <>
+                    <EyeOff size={16} /> Private
+                  </>
+                )}
+              </button>
+            </div>
             <div className="books-grid">
               {groupedBooks[shelfName].map((book) => (
-                <div 
-                  key={book.isbn} 
+                <div
+                  key={book.isbn}
                   className="book-card"
                   onClick={() => handleBookClick(book)}
                 >
@@ -110,10 +149,42 @@ function Library() {
                     ) : (
                       '📚'
                     )}
+                    {/* Indicators overlay */}
+                    <div className="book-indicators">
+                      {book.friendsReading > 0 && (
+                        <span className="friend-indicator" title={`${book.friendsReading} friends reading`}>
+                          👥 {book.friendsReading}
+                        </span>
+                      )}
+                      {book.hasMessage && (
+                        <span className="message-indicator" title="New message">
+                          💬
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  {/* Progress bar for Currently Reading */}
+                  {book.shelf === 'Currently Reading' && book.progress !== undefined && (
+                    <div className="book-progress-bar">
+                      <div
+                        className="book-progress-fill"
+                        style={{ width: `${book.progress}%` }}
+                      />
+                    </div>
+                  )}
                   <div className="book-card-info">
                     <h4>{book.title}</h4>
                     <p>{book.author}</p>
+                    {/* Rating */}
+                    <div className="book-card-rating" onClick={(e) => e.stopPropagation()}>
+                      <BookRating
+                        rating={book.rating || 0}
+                        onRatingChange={(rating) => handleRatingChange(book.isbn, rating)}
+                        theme={currentTheme}
+                        size="small"
+                        interactive={true}
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
@@ -122,7 +193,7 @@ function Library() {
         ))}
       </div>
 
-      {myBooks.length === 0 && !showSearch && (
+      {myBooks.length === 0 && (
         <div className="empty-library">
           <p>Your library is empty</p>
           <p>Add your first book to get started!</p>
