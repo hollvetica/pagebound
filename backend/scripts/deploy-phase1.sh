@@ -21,7 +21,7 @@ HERE="$(winpath "$(cd "$(dirname "$0")" && pwd)")"
 LAMBDA_DIR="$HERE/../lambda"
 BUILD_DIR="$(winpath "$(mktemp -d)")"
 
-aws_() { aws --region "$REGION" "$@"; }
+aws_() { MSYS_NO_PATHCONV=1 aws --region "$REGION" "$@"; }
 log() { printf '\n== %s\n' "$*"; }
 
 # ---------------------------------------------------------------------------
@@ -189,17 +189,9 @@ secure() {
   echo "   friends, user, sessions updated"
 
   log "Require sign-in on every non-OPTIONS method"
-  aws_ apigateway get-resources --rest-api-id "$API_ID" --limit 500 --embed methods \
-    --query "items[?resourceMethods].[id, join(',', keys(resourceMethods))]" --output text |
-  while read -r rid methods; do
-    for m in ${methods//,/ }; do
-      [ "$m" = OPTIONS ] && continue
-      aws_ apigateway update-method --rest-api-id "$API_ID" --resource-id "$rid" --http-method "$m" \
-        --patch-operations op=replace,path=/authorizationType,value=COGNITO_USER_POOLS \
-                           op=replace,path=/authorizerId,value="$auth_id" >/dev/null
-      echo "   $m $rid"
-    done
-  done
+  # Python + JSON output: the shell loop broke on Windows line endings and
+  # on the AWS CLI reading the loop's stdin
+  MSYS_NO_PATHCONV=1 python "$HERE/require_auth.py"
 
   log "Publish"
   deploy_stage "Phase 1 secure: Cognito auth on all routes"
