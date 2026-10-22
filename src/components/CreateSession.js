@@ -4,7 +4,6 @@ import './CreateSession.css';
 function CreateSession({ book, onClose, onCreateSession }) {
   const [sessionName, setSessionName] = useState(book.title);
   const [invitedFriends, setInvitedFriends] = useState([]);
-  const [friendInput, setFriendInput] = useState('');
   
   // Mock friends list - in real app, this would come from user's friends
   const mockFriends = ['Sarah', 'Alex', 'Maya', 'Jordan', 'Riley'];

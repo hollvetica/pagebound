@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { themes } from '../themes';
+import { themes, defaultTheme } from '../themes';
 import './BookRating.css';
 
 function BookRating({ rating = 0, onRatingChange, theme, size = 'medium', interactive = true }) {
@@ -10,7 +10,7 @@ function BookRating({ rating = 0, onRatingChange, theme, size = 'medium', intera
     setCurrentRating(rating);
   }, [rating]);
 
-  const themeData = themes[theme] || themes.fantasy;
+  const themeData = themes[theme] || themes[defaultTheme];
   const ratingIcon = themeData.ratingIcon || '⭐';
 
   const handleClick = (value) => {

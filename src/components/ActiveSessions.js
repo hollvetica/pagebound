@@ -7,7 +7,6 @@ function ActiveSessions({ sessions }) {
   }
 
   const calculateAverageProgress = (participants) => {
-    const totalChapters = participants.length > 0 ? participants[0].currentChapter : 0;
     const avgChapter = participants.reduce((sum, p) => sum + p.currentChapter, 0) / participants.length;
     return Math.round(avgChapter);
   };

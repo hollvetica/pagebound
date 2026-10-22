@@ -1,0 +1,42 @@
+{
+  "TableName": "pagebound-sessions",
+  "KeySchema": [
+    {
+      "AttributeName": "sessionId",
+      "KeyType": "HASH"
+    }
+  ],
+  "AttributeDefinitions": [
+    {
+      "AttributeName": "sessionId",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "bookIsbn",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "createdAt",
+      "AttributeType": "S"
+    }
+  ],
+  "GlobalSecondaryIndexes": [
+    {
+      "IndexName": "bookIsbn-index",
+      "KeySchema": [
+        {
+          "AttributeName": "bookIsbn",
+          "KeyType": "HASH"
+        },
+        {
+          "AttributeName": "createdAt",
+          "KeyType": "RANGE"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      }
+    }
+  ],
+  "BillingMode": "PAY_PER_REQUEST"
+}

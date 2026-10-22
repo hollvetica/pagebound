@@ -15,6 +15,58 @@ Resources:
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
 
+  # DynamoDB Table for Reading Sessions
+  SessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: pagebound-sessions
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+        - AttributeName: bookIsbn
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: bookIsbn-index
+          KeySchema:
+            - AttributeName: bookIsbn
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+
+  # DynamoDB Table for Session Messages
+  MessagesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: pagebound-messages
+      AttributeDefinitions:
+        - AttributeName: messageId
+          AttributeType: S
+        - AttributeName: sessionId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: messageId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: sessionId-index
+          KeySchema:
+            - AttributeName: sessionId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+
   # Cognito User Pool
   UserPool:
     Type: AWS::Cognito::UserPool
@@ -79,7 +131,13 @@ Resources:
                   - dynamodb:UpdateItem
                   - dynamodb:Scan
                   - dynamodb:Query
-                Resource: !GetAtt UsersTable.Arn
+                  - dynamodb:DeleteItem
+                Resource:
+                  - !GetAtt UsersTable.Arn
+                  - !GetAtt SessionsTable.Arn
+                  - !GetAtt MessagesTable.Arn
+                  - !Sub "${SessionsTable.Arn}/index/*"
+                  - !Sub "${MessagesTable.Arn}/index/*"
         - PolicyName: SESAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -135,6 +193,24 @@ Resources:
         Variables:
           USERS_TABLE: !Ref UsersTable
           USER_POOL_ID: !Ref UserPool
+      Code:
+        ZipFile: |
+          // Placeholder - replace with actual code during deployment
+          exports.handler = async (event) => { return { statusCode: 200, body: '{}' }; };
+
+  # Sessions API Lambda Function
+  SessionsAPIFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: pagebound-sessions-api
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          USERS_TABLE: !Ref UsersTable
+          SESSIONS_TABLE: !Ref SessionsTable
+          MESSAGES_TABLE: !Ref MessagesTable
       Code:
         ZipFile: |
           // Placeholder - replace with actual code during deployment

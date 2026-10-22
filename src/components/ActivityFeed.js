@@ -1,19 +1,36 @@
-import React from 'react';
 import './ActivityFeed.css';
 
 function ActivityFeed({ activities, onSuggestSession }) {
+  const renderAvatar = (activity) => {
+    if (activity.friendAvatarUrl) {
+      return (
+        <img
+          src={activity.friendAvatarUrl}
+          alt={activity.friend}
+          className="activity-avatar"
+        />
+      );
+    } else {
+      return (
+        <div className="activity-avatar-letter">
+          {activity.friend?.charAt(0).toUpperCase() || 'F'}
+        </div>
+      );
+    }
+  };
+
   const renderActivity = (activity) => {
     switch(activity.type) {
       case 'started_reading':
         return (
           <div className="activity-content">
-            <span className="activity-icon">📖</span>
+            {renderAvatar(activity)}
             <div className="activity-text">
               <p>
                 <strong>{activity.friend}</strong> started reading <em>{activity.book}</em>
               </p>
               {activity.mutual && (
-                <button 
+                <button
                   className="suggest-session-btn"
                   onClick={() => onSuggestSession && onSuggestSession(activity)}
                 >
@@ -23,17 +40,17 @@ function ActivityFeed({ activities, onSuggestSession }) {
             </div>
           </div>
         );
-      
+
       case 'added_to_wishlist':
         return (
           <div className="activity-content">
-            <span className="activity-icon">⭐</span>
+            {renderAvatar(activity)}
             <div className="activity-text">
               <p>
                 <strong>{activity.friend}</strong> added <em>{activity.book}</em> to their wishlist
               </p>
               {activity.mutual && (
-                <button 
+                <button
                   className="suggest-session-btn"
                   onClick={() => onSuggestSession && onSuggestSession(activity)}
                 >
@@ -43,11 +60,11 @@ function ActivityFeed({ activities, onSuggestSession }) {
             </div>
           </div>
         );
-      
+
       case 'completed_book':
         return (
           <div className="activity-content">
-            <span className="activity-icon">✅</span>
+            {renderAvatar(activity)}
             <div className="activity-text">
               <p>
                 <strong>{activity.friend}</strong> finished <em>{activity.book}</em>
@@ -55,11 +72,11 @@ function ActivityFeed({ activities, onSuggestSession }) {
             </div>
           </div>
         );
-      
+
       case 'achievement':
         return (
           <div className="activity-content">
-            <span className="activity-icon">🏆</span>
+            {renderAvatar(activity)}
             <div className="activity-text">
               <p>
                 <strong>{activity.friend}</strong> earned: {activity.achievement}
@@ -67,7 +84,7 @@ function ActivityFeed({ activities, onSuggestSession }) {
             </div>
           </div>
         );
-      
+
       default:
         return null;
     }

@@ -1,0 +1,42 @@
+{
+  "TableName": "pagebound-messages",
+  "KeySchema": [
+    {
+      "AttributeName": "messageId",
+      "KeyType": "HASH"
+    }
+  ],
+  "AttributeDefinitions": [
+    {
+      "AttributeName": "messageId",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "sessionId",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "createdAt",
+      "AttributeType": "S"
+    }
+  ],
+  "GlobalSecondaryIndexes": [
+    {
+      "IndexName": "sessionId-index",
+      "KeySchema": [
+        {
+          "AttributeName": "sessionId",
+          "KeyType": "HASH"
+        },
+        {
+          "AttributeName": "createdAt",
+          "KeyType": "RANGE"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      }
+    }
+  ],
+  "BillingMode": "PAY_PER_REQUEST"
+}

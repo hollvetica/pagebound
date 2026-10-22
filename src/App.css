@@ -1,204 +1,299 @@
-/* App Container */
+/* App shell */
 .App {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--color-background);
-  transition: var(--transition);
-  position: relative;
 }
 
-/* App Header */
+/* Top bar */
 .App-header {
-  padding: 1.5rem 2rem;
-  background: linear-gradient(180deg, var(--color-card-bg) 0%, var(--color-background) 100%);
-  box-shadow: 
-    0 4px 6px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
   z-index: 100;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--header-height);
+  /* Align the wordmark with the content column on wide screens */
+  padding: 0 max(var(--page-gutter), calc((100% - var(--content-max-width)) / 2 + var(--page-gutter)));
+  background: rgba(17, 19, 22, 0.82);
+  border-bottom: 1px solid var(--color-border);
+  backdrop-filter: saturate(140%) blur(12px);
+  -webkit-backdrop-filter: saturate(140%) blur(12px);
 }
 
 .App-header h1 {
-  font-size: 1.75rem;
-  font-weight: 700;
   font-family: var(--font-heading);
-  margin: 0 0 0.25rem 0;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  letter-spacing: 0.5px;
-}
-
-.App-header p {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-display);
+  letter-spacing: var(--letter-spacing-tight);
+  color: var(--color-text);
   margin: 0;
-  font-size: 0.875rem;
-  color: var(--color-text-secondary);
-  font-weight: 500;
 }
 
-/* Main Content Area */
-.App-main {
-  flex: 1;
-  padding: 2rem;
-  padding-bottom: 6rem; /* Space for bottom nav */
-  overflow-y: auto;
-  position: relative;
-  z-index: 1;
+/* Tagline only shows on the sign-in screens */
+.App-header p {
+  display: none;
 }
 
-/* Page Container */
-.page {
-  max-width: 1200px;
-  margin: 0 auto;
-  animation: fadeIn 0.3s ease-out;
-}
-
-/* Responsive Adjustments */
-@media (max-width: 768px) {
-  .App-header {
-    padding: 1rem 1.5rem;
-  }
-  
-  .App-header h1 {
-    font-size: 1.5rem;
-  }
-  
-  .App-header p {
-    font-size: 0.8rem;
-  }
-  
-  .App-main {
-    padding: 1.5rem 1rem;
-    padding-bottom: 6rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .App-header {
-    padding: 1rem;
-  }
-  
-  .App-header h1 {
-    font-size: 1.25rem;
-  }
-  
-  .App-main {
-    padding: 1rem;
-    padding-bottom: 6rem;
-  }
-}
-
-/* Loading State */
-.App.loading {
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-/* Error State */
-.error-container {
-  display: flex;
+.auth-app .App-header {
+  position: static;
   flex-direction: column;
-  align-items: center;
   justify-content: center;
-  min-height: 400px;
-  padding: 2rem;
+  gap: var(--space-1);
+  height: auto;
+  padding: var(--space-12) var(--page-gutter) var(--space-2);
+  background: transparent;
+  border-bottom: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   text-align: center;
 }
 
-.error-container h2 {
-  color: var(--color-accent);
-  margin-bottom: 1rem;
-  font-family: var(--font-heading);
+.auth-app .App-header h1 {
+  font-size: var(--font-size-2xl);
 }
 
-.error-container p {
+.auth-app .App-header p {
+  display: block;
+  font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
-  margin-bottom: 1.5rem;
 }
 
-.error-container button {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
-  color: white;
+/* Main content column */
+.App-main {
+  flex: 1;
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  padding: var(--space-5) var(--page-gutter) calc(var(--nav-height) + var(--space-8));
+}
+
+.auth-app .App-main {
+  padding-bottom: var(--space-8);
+}
+
+.page {
+  animation: slideUp 240ms var(--ease-standard);
+}
+
+/* Shared page header: title + optional count/action */
+.page-header,
+.home-header,
+.sessions-header,
+.library-header,
+.friends-header,
+.admin-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.page-header h2,
+.home-header h2,
+.sessions-header h2,
+.library-header h2,
+.friends-header h1,
+.settings-page h2,
+.admin-header h2 {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-display);
+  letter-spacing: var(--letter-spacing-tight);
+  line-height: var(--line-height-tight);
+  color: var(--color-text);
+  margin: 0;
+}
+
+/* Section headings inside a page (overline style) */
+.section-title,
+.active-sessions-section h3,
+.activity-feed h3,
+.shelf-section h3,
+.participants-section h4,
+.settings-section h3,
+.favorite-books-section h3,
+.friend-profile-section h3,
+.requests-section-title,
+.results-title,
+.search-results h4 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: 0;
   border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition);
+  font-family: var(--font-body);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
 }
 
-.error-container button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-}
-
-/* Loading Container */
+/* Loading */
 .loading-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--space-2);
   min-height: 100vh;
-  padding: 2rem;
+  padding: var(--space-8);
   text-align: center;
 }
 
 .loading-container h1 {
-  font-size: 2.5rem;
-  font-weight: 700;
   font-family: var(--font-heading);
-  margin: 0 0 1rem 0;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-display);
+  color: var(--color-text);
 }
 
 .loading-container p {
-  color: var(--color-text);
-  font-size: 1.1rem;
-  opacity: 0.7;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  animation: pulse 1.6s ease-in-out infinite;
 }
 
-/* Auth App Specific Styles */
-.auth-app .App-main {
-  padding-bottom: 2rem;
+/* Error */
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: 320px;
+  padding: var(--space-8);
+  text-align: center;
 }
 
+.error-container h2 {
+  font-size: var(--font-size-lg);
+}
+
+.error-container p {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* Theme picker on the sign-in screens */
 .auth-theme-selector {
-  padding: 2rem;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-card-bg);
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  padding: 0 var(--page-gutter) var(--space-8);
 }
 
-/* Back to Profile Button */
+/* Floating "back" pill on Settings / Admin / Friend profile */
 .back-to-profile {
   position: fixed;
-  bottom: 2rem;
+  bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
-  background: var(--color-primary);
-  color: var(--color-background);
-  border: none;
-  padding: 1rem 2rem;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  font-family: var(--font-heading);
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  transition: all 0.2s;
   z-index: 100;
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-md);
 }
 
-.back-to-profile:hover {
-  opacity: 0.9;
-  transform: translateX(-50%) translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+.back-to-profile:active {
+  transform: translateX(-50%) scale(0.98);
+}
+
+/* Auth screens (login / signup / password reset share one card) */
+.login-container,
+.signup-container,
+.reset-container {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-6) 0 var(--space-8);
+}
+
+.login-card,
+.signup-card,
+.reset-card {
+  width: 100%;
+  max-width: 400px;
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+}
+
+.login-card h1,
+.signup-card h1,
+.reset-card h1 {
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-heading);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-display);
+  color: var(--color-text);
+  text-align: left;
+}
+
+.login-subtitle,
+.signup-subtitle,
+.reset-subtitle {
+  margin: 0 0 var(--space-6);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  text-align: left;
+}
+
+.login-form,
+.signup-form,
+.reset-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.login-button,
+.signup-button,
+.reset-button {
+  width: 100%;
+  margin-top: var(--space-2);
+}
+
+.login-footer,
+.signup-footer,
+.reset-footer {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.login-footer p,
+.signup-footer p,
+.reset-footer p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.auth-theme-selector:empty {
+  display: none;
+}
+
+/* Wordmark */
+.app-logo {
+  display: flex;
+  line-height: 0;
+}
+
+.app-logo img {
+  height: 24px;
+  width: auto;
+}
+
+.auth-app .app-logo img {
+  height: 44px;
+}
+
+.loading-container .app-logo img {
+  height: 40px;
 }

@@ -1,0 +1,23 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DynamoDBAccess",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:us-east-1:462233538835:table/pagebound-sessions",
+        "arn:aws:dynamodb:us-east-1:462233538835:table/pagebound-sessions/index/*",
+        "arn:aws:dynamodb:us-east-1:462233538835:table/pagebound-messages",
+        "arn:aws:dynamodb:us-east-1:462233538835:table/pagebound-messages/index/*"
+      ]
+    }
+  ]
+}

@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
 import { useSession } from '../context/SessionContext';
+import { useAuth } from '../context/AuthContext';
 import UpdateProgress from '../components/UpdateProgress';
+import Discussion from '../components/Discussion';
+import ParticipantTimeline from '../components/ParticipantTimeline';
 import './Sessions.css';
 
 function Sessions() {
   const { sessions, updateParticipantProgress } = useSession();
+  const { userProfile } = useAuth();
   const [showUpdateProgress, setShowUpdateProgress] = useState(false);
+  const [showDiscussion, setShowDiscussion] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
 
   const handleUpdateProgress = (session) => {
@@ -13,14 +18,22 @@ function Sessions() {
     setShowUpdateProgress(true);
   };
 
+  const handleOpenDiscussion = (session) => {
+    setSelectedSession(session);
+    setShowDiscussion(true);
+  };
+
   const handleSaveProgress = (sessionId, participantName, newChapter) => {
     updateParticipantProgress(sessionId, participantName, newChapter);
   };
 
-  const calculateAverageProgress = (participants) => {
-    if (participants.length === 0) return 0;
-    const avgChapter = participants.reduce((sum, p) => sum + p.currentChapter, 0) / participants.length;
-    return Math.round(avgChapter);
+  const calculateGroupRating = (session) => {
+    // Mock data - will be replaced with actual user ratings from bookshelf
+    // This would fetch ratings from each participant's Library for this book
+    const mockRatings = [4.5, 5, 4, 4.5]; // Would come from userProfile bookshelf ratings
+    if (mockRatings.length === 0) return null;
+    const avgRating = mockRatings.reduce((sum, r) => sum + r, 0) / mockRatings.length;
+    return avgRating.toFixed(1);
   };
 
   return (
@@ -39,11 +52,7 @@ function Sessions() {
       ) : (
         <div className="sessions-grid">
           {sessions.map((session) => {
-            const avgProgress = calculateAverageProgress(session.participants);
-            const progressPercent = session.totalChapters 
-              ? Math.round((avgProgress / session.totalChapters) * 100)
-              : 0;
-            const userProgress = session.participants.find(p => p.isHost)?.currentChapter || 0;
+            const groupRating = calculateGroupRating(session);
 
             return (
               <div key={session.id} className="session-detail-card">
@@ -55,10 +64,17 @@ function Sessions() {
                       <div className="cover-placeholder-large">📚</div>
                     )}
                   </div>
-                  
+
                   <div className="session-card-info">
                     <h3>{session.sessionName || session.bookTitle}</h3>
                     <p className="session-book-author">{session.bookAuthor}</p>
+                    {groupRating && (
+                      <div className="group-rating">
+                        <span className="rating-stars">⭐</span>
+                        <span className="rating-value">{groupRating}</span>
+                        <span className="rating-label">Group Rating</span>
+                      </div>
+                    )}
                     <div className="session-meta">
                       <span className="meta-item">
                         📖 {session.totalChapters} chapters
@@ -70,58 +86,28 @@ function Sessions() {
                   </div>
                 </div>
 
-                <div className="session-progress-section">
-                  <div className="progress-header">
-                    <span className="progress-label">Group Progress</span>
-                    <span className="progress-percentage">{progressPercent}%</span>
-                  </div>
-                  <div className="progress-bar-large">
-                    <div 
-                      className="progress-fill-large" 
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
-                  <p className="progress-detail">
-                    Average: Chapter {avgProgress} of {session.totalChapters}
-                  </p>
-                </div>
-
                 <div className="participants-section">
                   <h4>Participants</h4>
                   <div className="participants-list">
-                    {session.participants.map((participant, idx) => {
-                      const participantPercent = session.totalChapters
-                        ? Math.round((participant.currentChapter / session.totalChapters) * 100)
-                        : 0;
-                      
-                      return (
-                        <div key={idx} className="participant-item">
-                          <div className="participant-info">
-                            <span className="participant-name">
-                              {participant.name}
-                              {participant.isHost && <span className="host-badge">Host</span>}
-                            </span>
-                            <span className="participant-progress">
-                              Chapter {participant.currentChapter} · {participantPercent}%
-                            </span>
-                          </div>
-                          <div className="participant-progress-bar">
-                            <div 
-                              className="participant-progress-fill"
-                              style={{ width: `${participantPercent}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {session.participants.map((participant, idx) => (
+                      <ParticipantTimeline
+                        key={idx}
+                        participant={participant}
+                        session={session}
+                        currentUserId={userProfile?.userId}
+                      />
+                    ))}
                   </div>
                 </div>
 
                 <div className="session-actions-section">
-                  <button className="session-action-btn primary">
+                  <button
+                    className="session-action-btn primary"
+                    onClick={() => handleOpenDiscussion(session)}
+                  >
                     💬 Open Discussion
                   </button>
-                  <button 
+                  <button
                     className="session-action-btn secondary"
                     onClick={() => handleUpdateProgress(session)}
                   >
@@ -148,6 +134,17 @@ function Sessions() {
             setSelectedSession(null);
           }}
           onUpdateProgress={handleSaveProgress}
+        />
+      )}
+
+      {showDiscussion && selectedSession && userProfile && (
+        <Discussion
+          session={selectedSession}
+          userId={userProfile.userId}
+          onClose={() => {
+            setShowDiscussion(false);
+            setSelectedSession(null);
+          }}
         />
       )}
     </div>

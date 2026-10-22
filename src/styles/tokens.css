@@ -1,0 +1,166 @@
+/*
+ * Pagebound design tokens
+ *
+ * Every component reads from these variables. A theme only has to change
+ * values here (or set them at runtime via ThemeContext) — never component CSS.
+ *
+ * Defaults below are the "Study" theme: academic, modern, moody, balanced.
+ * Ink-dark surfaces, parchment text, a single brass accent, patina secondary.
+ */
+
+:root {
+  /* ---------- Color: surfaces ---------- */
+  --color-background: #111316;      /* page */
+  --color-surface: #171a1e;         /* cards, sheets */
+  --color-surface-raised: #1e2227;  /* hover, inputs, nested cards */
+  --color-surface-sunken: #0d0f12;  /* wells, progress tracks */
+  --color-border: #2a2f36;
+  --color-border-strong: #3a414a;
+  --color-overlay: rgba(6, 7, 9, 0.72);
+
+  /* ---------- Color: text ---------- */
+  --color-text: #ece6da;            /* primary copy */
+  --color-text-secondary: #a8a196;  /* supporting copy */
+  --color-text-tertiary: #716c64;   /* meta, timestamps, placeholders */
+
+  /* ---------- Color: brand ---------- */
+  --color-primary: #c9a66b;         /* brass */
+  --color-primary-hover: #d8b87f;
+  --color-primary-pressed: #b38f56;
+  --color-primary-soft: rgba(201, 166, 107, 0.12);
+  --color-on-primary: #17130c;      /* text on brass */
+  --color-secondary: #8fa89c;       /* patina */
+  --color-secondary-soft: rgba(143, 168, 156, 0.14);
+
+  /* ---------- Color: status ---------- */
+  --color-success: #8db596;
+  --color-success-soft: rgba(141, 181, 150, 0.12);
+  --color-warning: #d9a55b;
+  --color-warning-soft: rgba(217, 165, 91, 0.12);
+  --color-danger: #d27c6c;
+  --color-danger-soft: rgba(210, 124, 108, 0.12);
+  --color-focus: rgba(201, 166, 107, 0.45);
+
+  /* ---------- Type ---------- */
+  --font-heading: 'Newsreader', 'Iowan Old Style', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+
+  --font-size-2xs: 0.6875rem;  /* 11 — overlines, badges */
+  --font-size-xs: 0.75rem;     /* 12 — meta, timestamps */
+  --font-size-sm: 0.8125rem;   /* 13 — secondary copy, buttons, labels */
+  --font-size-base: 0.9375rem; /* 15 — body */
+  --font-size-md: 1.0625rem;   /* 17 — card titles */
+  --font-size-lg: 1.25rem;     /* 20 — section titles */
+  --font-size-xl: 1.5rem;      /* 24 — page titles */
+  --font-size-2xl: 1.875rem;   /* 30 — hero / stats */
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-display: 400; /* serif headings */
+
+  --line-height-tight: 1.2;
+  --line-height-snug: 1.35;
+  --line-height-normal: 1.5;
+
+  --letter-spacing-tight: -0.01em;
+  --letter-spacing-caps: 0.08em;
+
+  /* ---------- Space (4px grid) ---------- */
+  --space-1: 0.25rem;  /* 4 */
+  --space-2: 0.5rem;   /* 8 */
+  --space-3: 0.75rem;  /* 12 */
+  --space-4: 1rem;     /* 16 */
+  --space-5: 1.25rem;  /* 20 */
+  --space-6: 1.5rem;   /* 24 */
+  --space-8: 2rem;     /* 32 */
+  --space-10: 2.5rem;  /* 40 */
+  --space-12: 3rem;    /* 48 */
+
+  /* ---------- Radius ---------- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
+
+  /* ---------- Controls ---------- */
+  --control-height-sm: 32px;
+  --control-height-md: 36px;
+  --control-height-lg: 40px;
+  --control-padding-sm: 0.75rem;
+  --control-padding-md: 0.875rem;
+  --control-padding-lg: 1rem;
+  --icon-size-sm: 16px;
+  --icon-size-md: 18px;
+  --icon-size-lg: 20px;
+  --avatar-size-sm: 28px;
+  --avatar-size-md: 36px;
+  --avatar-size-lg: 56px;
+  --avatar-size-xl: 72px;
+
+  /* ---------- Elevation ---------- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.45);
+
+  /* ---------- Motion ---------- */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition: all var(--duration-base) var(--ease-standard);
+  --transition-fast: all var(--duration-fast) var(--ease-standard);
+
+  /* ---------- Texture ----------
+   * Page background material: a dark leather photo, stretched to cover the
+   * viewport and fixed in place. Phones get the 1280px file, wider screens
+   * the 2560px one (see the media query at the end). Swap the files per
+   * theme; set --texture-opacity to 0 for the flat --color-background.
+   * Source: /texture1.png (full resolution, not shipped). */
+  --texture-leather: url('../assets/textures/leather-dark-small.jpg');
+  --texture-size: cover;
+  --texture-opacity: 1;
+
+  /* ---------- Layout ---------- */
+  --header-height: 52px;
+  --nav-height: 60px;
+  --content-max-width: 640px;
+  --page-gutter: 1rem;
+
+  /* ---------- Legacy aliases ----------
+   * Older components referenced these names directly (several were never
+   * defined). Keep them pointing at the canonical tokens until every file
+   * is on the new names. */
+  --color-primary-dark: var(--color-primary-pressed);
+  --color-card: var(--color-surface);
+  --color-card-bg: var(--color-surface);
+  --color-accent: var(--color-primary);
+  --color-progress-bg: var(--color-surface-sunken);
+  --primary: var(--color-primary);
+  --primary-color: var(--color-primary);
+  --primary-dark: var(--color-primary-pressed);
+  --primary-light: var(--color-primary-soft);
+  --primary-rgb: 201, 166, 107;
+  --secondary-color: var(--color-secondary);
+  --background: var(--color-background);
+  --surface: var(--color-surface);
+  --card-bg: var(--color-surface);
+  --border: var(--color-border);
+  --border-color: var(--color-border);
+  --hover: var(--color-surface-raised);
+  --bg-secondary: var(--color-surface-raised);
+  --bg-tertiary: var(--color-surface-sunken);
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-tertiary);
+  --warning-color: var(--color-warning);
+}
+
+@media (min-width: 768px) {
+  :root {
+    --page-gutter: 1.5rem;
+    --texture-leather: url('../assets/textures/leather-dark.jpg');
+  }
+}

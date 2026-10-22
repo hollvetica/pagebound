@@ -17,6 +17,11 @@ const themeIcons = {
 function ThemeSelector() {
   const { currentTheme, changeTheme, availableThemes } = useTheme();
 
+  // Nothing to choose until there is more than one theme
+  if (Object.keys(availableThemes).length < 2) {
+    return null;
+  }
+
   return (
     <div className="theme-selector">
       <h3>Choose Your Reading Vibe</h3>

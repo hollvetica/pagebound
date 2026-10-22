@@ -21,3 +21,15 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Full-resolution design source (web versions live in src/assets/textures)
+/texture1.png
+/Pagebound Gold Bookmark Logo.png
+
+# Lambda build output
+/backend/lambda/node_modules/
+/backend/lambda/package/
+/backend/lambda/*.zip
+
+# Stray Windows device file
+/nul

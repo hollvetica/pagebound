@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { getCurrentUser, signIn, signUp, signOut, confirmSignUp, resetPassword, confirmResetPassword } from 'aws-amplify/auth';
-import { fetchUserProfile, createUserProfile, updateUsername, checkUsernameAvailable } from '../utils/userService';
+import { fetchUserProfile, updateUsername, checkUsernameAvailable } from '../utils/userService';
+import { getAvatarUploadUrl, uploadAvatarToS3, confirmAvatarUpload, updateProfile } from '../utils/profileService';
 
 const AuthContext = createContext();
 
@@ -23,6 +24,15 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const checkUser = async () => {
+    // Dev-only UI preview: open http://localhost:3000/?preview to see the
+    // signed-in screens with a placeholder user, without touching Cognito.
+    if (process.env.NODE_ENV === 'development' && window.location.search.includes('preview')) {
+      setUser({ userId: 'preview-user', signInDetails: { loginId: 'preview@pagebound.test' } });
+      setUserProfile({ userId: 'preview-user', email: 'preview@pagebound.test', username: 'hollie', tagline: 'Reading slowly, on purpose.', isAdmin: false });
+      setLoading(false);
+      return;
+    }
+
     try {
       const currentUser = await getCurrentUser();
       setUser(currentUser);
@@ -150,7 +160,7 @@ export const AuthProvider = ({ children }) => {
   const changeUsername = async (newUsername) => {
     try {
       setError(null);
-      
+
       // Check if username is available
       const isAvailable = await checkUsernameAvailable(newUsername);
       if (!isAvailable) {
@@ -159,10 +169,77 @@ export const AuthProvider = ({ children }) => {
 
       // Update username in DynamoDB
       await updateUsername(user.signInDetails.loginId, newUsername);
-      
+
       // Refresh user profile
       await checkUser();
-      
+
+      return { success: true };
+    } catch (err) {
+      setError(err.message);
+      return { success: false, error: err.message };
+    }
+  };
+
+  const updateProfilePhoto = async (file) => {
+    try {
+      setError(null);
+
+      if (!user) {
+        return { success: false, error: 'User not authenticated' };
+      }
+
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        return { success: false, error: 'Image must be less than 5MB' };
+      }
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        return { success: false, error: 'File must be an image' };
+      }
+
+      // Get presigned URL
+      const { uploadUrl, imageUrl } = await getAvatarUploadUrl(
+        user.signInDetails.loginId,
+        file.type
+      );
+
+      // Upload to S3
+      await uploadAvatarToS3(uploadUrl, file);
+
+      // Confirm and update DB
+      await confirmAvatarUpload(user.signInDetails.loginId, imageUrl);
+
+      // Refresh profile
+      await checkUser();
+
+      return { success: true, imageUrl };
+    } catch (err) {
+      setError(err.message);
+      return { success: false, error: err.message };
+    }
+  };
+
+  const updateUserProfile = async (updates) => {
+    try {
+      setError(null);
+
+      if (!user) {
+        return { success: false, error: 'User not authenticated' };
+      }
+
+      // Validate updates
+      if (updates.tagline && updates.tagline.length > 255) {
+        return { success: false, error: 'Tagline must be 255 characters or less' };
+      }
+
+      if (updates.favoriteBooks && updates.favoriteBooks.length > 10) {
+        return { success: false, error: 'Cannot have more than 10 favorite books' };
+      }
+
+      await updateProfile(user.signInDetails.loginId, updates);
+      await checkUser();
+
       return { success: true };
     } catch (err) {
       setError(err.message);
@@ -182,6 +259,9 @@ export const AuthProvider = ({ children }) => {
     initiatePasswordReset,
     confirmPasswordReset,
     changeUsername,
+    updateProfilePhoto,
+    updateUserProfile,
+    checkUser,
     isAuthenticated: !!user,
     isAdmin: userProfile?.isAdmin || false
   };

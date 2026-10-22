@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from './context/AuthContext';
 import './App.css';
+import logo from './assets/pagebound-logo.png';
 import ThemeSelector from './components/ThemeSelector';
 import BottomNav from './components/BottomNav';
 import Home from './pages/Home';
@@ -57,7 +58,7 @@ function App() {
     return (
       <div className="App">
         <div className="loading-container">
-          <h1>Pagebound</h1>
+          <h1 className="app-logo"><img src={logo} alt="Pagebound" /></h1>
           <p>Loading...</p>
         </div>
       </div>
@@ -69,7 +70,7 @@ function App() {
     return (
       <div className="App auth-app">
         <header className="App-header">
-          <h1>Pagebound</h1>
+          <h1 className="app-logo"><img src={logo} alt="Pagebound" /></h1>
           <p>Read together. Stay in sync. No spoilers.</p>
         </header>
         
@@ -98,7 +99,7 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>Pagebound</h1>
+        <h1 className="app-logo"><img src={logo} alt="Pagebound" /></h1>
         <p>Read together. Stay in sync. No spoilers.</p>
       </header>
       

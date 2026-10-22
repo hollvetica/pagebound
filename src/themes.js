@@ -1,4 +1,59 @@
+/*
+ * Themes
+ *
+ * A theme is a set of token values. ThemeContext writes each `colors` key to
+ * a CSS variable (camelCase -> kebab-case, e.g. textSecondary ->
+ * --color-text-secondary), plus the fonts. Structural tokens (type scale,
+ * spacing, radius, control sizes) live in src/styles/tokens.css and can be
+ * overridden per theme through the optional `tokens` map.
+ *
+ * To add a theme: copy `study`, change the values, keep every key.
+ */
 export const themes = {
+  study: {
+    name: 'Study',
+    ratingIcon: '★',
+    colors: {
+      background: '#111316',
+      surface: '#171a1e',
+      surfaceRaised: '#1e2227',
+      surfaceSunken: '#0d0f12',
+      border: '#2a2f36',
+      borderStrong: '#3a414a',
+      overlay: 'rgba(6, 7, 9, 0.72)',
+      text: '#ece6da',
+      textSecondary: '#a8a196',
+      textTertiary: '#716c64',
+      primary: '#c9a66b',
+      primaryHover: '#d8b87f',
+      primaryPressed: '#b38f56',
+      primarySoft: 'rgba(201, 166, 107, 0.12)',
+      onPrimary: '#17130c',
+      secondary: '#8fa89c',
+      secondarySoft: 'rgba(143, 168, 156, 0.14)',
+      success: '#8db596',
+      successSoft: 'rgba(141, 181, 150, 0.12)',
+      warning: '#d9a55b',
+      warningSoft: 'rgba(217, 165, 91, 0.12)',
+      danger: '#d27c6c',
+      dangerSoft: 'rgba(210, 124, 108, 0.12)',
+      focus: 'rgba(201, 166, 107, 0.45)'
+    },
+    fonts: {
+      heading: "'Newsreader', 'Iowan Old Style', Georgia, serif",
+      body: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    },
+    tokens: {
+      'primary-rgb': '201, 166, 107'
+    }
+  }
+};
+
+/*
+ * The original genre themes, kept for reference while they are ported to the
+ * token format above. They are not offered in the theme picker.
+ */
+export const legacyThemes = {
   fantasy: {
     name: 'Fantasy',
     ratingIcon: '⭐',
@@ -192,4 +247,4 @@ export const themes = {
   }
 };
 
-export const defaultTheme = 'fantasy';
+export const defaultTheme = 'study';

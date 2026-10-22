@@ -1,57 +1,66 @@
 .friends-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-3);
 }
 
 .friends-count {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  background: var(--surface);
-  border-radius: 8px;
-  color: var(--text-secondary);
-  font-weight: 500;
-  font-size: 0.9rem;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
 }
 
+.friends-count svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* One grouped list of people */
 .friends-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 
 .friend-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  transition: all 0.2s;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.friend-card + .friend-card {
+  border-top: 1px solid var(--color-border);
 }
 
 .friend-card:hover {
-  border-color: var(--primary);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background: var(--color-surface-raised);
 }
 
 .friend-info {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-3);
   flex: 1;
   min-width: 0;
 }
 
 .friend-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  overflow: hidden;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
+  overflow: hidden;
+  border-radius: var(--radius-full);
 }
 
 .friend-avatar img {
@@ -63,13 +72,8 @@
 .friend-avatar-placeholder {
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--primary);
-  color: white;
-  font-size: 1.25rem;
-  font-weight: 600;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-md);
 }
 
 .friend-details {
@@ -78,10 +82,11 @@
 }
 
 .friend-details h3 {
-  margin: 0 0 0.25rem;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -89,8 +94,8 @@
 
 .friend-details p {
   margin: 0;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -98,48 +103,10 @@
 
 .friend-actions {
   display: flex;
-  gap: 0.5rem;
-}
-
-.friend-action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  background: var(--hover);
-  border: none;
-  border-radius: 8px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.friend-action-btn:hover {
-  background: var(--primary);
-  color: white;
-}
-
-.friend-action-btn.message-btn:hover {
-  background: var(--primary);
+  gap: var(--space-1);
 }
 
 .friend-action-btn.remove-btn:hover {
-  background: #dc2626;
-}
-
-/* Responsive */
-@media (max-width: 640px) {
-  .friends-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .friend-card {
-    padding: 0.875rem;
-  }
-
-  .friend-avatar {
-    width: 40px;
-    height: 40px;
-  }
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import BookSearch from '../components/BookSearch';
 import BookDetail from './BookDetail';
@@ -6,11 +6,14 @@ import CreateSession from '../components/CreateSession';
 import BookRating from '../components/BookRating';
 import { useSession } from '../context/SessionContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { getLibraryBooks, addBookToLibrary, updateLibraryBook } from '../utils/libraryService';
 import './Library.css';
 
 function Library() {
   const { createSession } = useSession();
   const { currentTheme } = useTheme();
+  const { userProfile } = useAuth();
 
   // Track shelf visibility (public/private)
   const [shelfVisibility, setShelfVisibility] = useState({
@@ -26,46 +29,84 @@ function Library() {
     }));
   };
   
-  const [myBooks, setMyBooks] = useState([
-    // Mock books already in library
-    {
-      isbn: '9780385537858',
-      title: 'The Night Circus',
-      author: 'Erin Morgenstern',
-      coverUrl: null,
-      shelf: 'Currently Reading',
-      currentChapter: 5,
-      totalChapters: 15,
-      progress: 33, // percentage
-      friendsReading: 3,
-      hasMessage: true,
-      rating: 0
-    },
-    {
-      isbn: '9780525559474',
-      title: 'Mexican Gothic',
-      author: 'Silvia Moreno-Garcia',
-      coverUrl: null,
-      shelf: 'Want to Read',
-      totalChapters: 12,
-      friendsReading: 1,
-      hasMessage: false,
-      rating: 0
-    }
-  ]);
-
+  const [myBooks, setMyBooks] = useState([]);
   const [selectedBook, setSelectedBook] = useState(null);
   const [showCreateSession, setShowCreateSession] = useState(false);
+  const [, setIsLoaded] = useState(false);
 
-  const handleAddBook = (book) => {
+  // Load books from backend on mount
+  useEffect(() => {
+    const loadLibrary = async () => {
+      if (userProfile?.userId) {
+        try {
+          // Try to load from backend first
+          const backendBooks = await getLibraryBooks(userProfile.userId);
+
+          if (backendBooks.books && backendBooks.books.length > 0) {
+            setMyBooks(backendBooks.books);
+            // Sync to localStorage for offline cache
+            localStorage.setItem('pagebound-library', JSON.stringify(backendBooks.books));
+          } else {
+            // Fallback to localStorage if backend is empty (first-time migration)
+            const localBooks = localStorage.getItem('pagebound-library');
+            if (localBooks) {
+              const parsed = JSON.parse(localBooks);
+              setMyBooks(parsed);
+
+              // Sync to backend
+              await Promise.all(
+                parsed.map((book) => addBookToLibrary(userProfile.userId, book))
+              );
+            }
+          }
+        } catch (error) {
+          console.error('Error loading library:', error);
+          // Fallback to localStorage on error
+          const localBooks = localStorage.getItem('pagebound-library');
+          if (localBooks) {
+            setMyBooks(JSON.parse(localBooks));
+          }
+        } finally {
+          setIsLoaded(true);
+        }
+      } else {
+        setIsLoaded(true);
+      }
+    };
+    loadLibrary();
+  }, [userProfile]);
+
+  const handleAddBook = async (book) => {
     // Check if book is already in library
     if (myBooks.find(b => b.isbn === book.isbn)) {
       alert('This book is already in your library!');
       return;
     }
 
-    // Add book to library with default shelf
-    setMyBooks([...myBooks, { ...book, shelf: 'Want to Read' }]);
+    const newBook = {
+      ...book,
+      shelf: 'Want to Read',
+      addedAt: new Date().toISOString(),
+      currentChapter: 0,
+      totalChapters: 0,
+      progress: 0,
+      rating: 0,
+      friendsReading: 0,
+      hasMessage: false
+    };
+
+    // Add book to local state
+    setMyBooks([...myBooks, newBook]);
+
+    // Sync to backend and localStorage
+    if (userProfile?.userId) {
+      try {
+        await addBookToLibrary(userProfile.userId, newBook);
+      } catch (error) {
+        console.error('Error adding book to backend:', error);
+      }
+    }
+    localStorage.setItem('pagebound-library', JSON.stringify([...myBooks, newBook]));
   };
 
   const handleBookClick = (book) => {
@@ -86,16 +127,29 @@ function Library() {
     alert('Reading session created! Check your home page.');
   };
 
-  const handleUpdateBook = (updatedBook) => {
-    setMyBooks(myBooks.map(book =>
+  const handleUpdateBook = async (updatedBook) => {
+    const newBooks = myBooks.map((book) =>
       book.isbn === updatedBook.isbn ? updatedBook : book
-    ));
+    );
+
+    setMyBooks(newBooks);
+
+    // Sync to backend and localStorage
+    if (userProfile?.userId) {
+      try {
+        await updateLibraryBook(userProfile.userId, updatedBook.isbn, updatedBook);
+      } catch (error) {
+        console.error('Error updating book in backend:', error);
+      }
+    }
+    localStorage.setItem('pagebound-library', JSON.stringify(newBooks));
   };
 
-  const handleRatingChange = (isbn, newRating) => {
-    setMyBooks(myBooks.map(book =>
-      book.isbn === isbn ? { ...book, rating: newRating } : book
-    ));
+  const handleRatingChange = async (isbn, newRating) => {
+    const book = myBooks.find((b) => b.isbn === isbn);
+    if (book) {
+      await handleUpdateBook({ ...book, rating: newRating });
+    }
   };
 
   const groupedBooks = myBooks.reduce((acc, book) => {
