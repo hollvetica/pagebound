@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useFriends } from '../context/FriendsContext';
-import { User, Users, BookOpen, MessageCircle, UserMinus } from 'lucide-react';
+import { User, Users, BookOpen, UserPlus, UserMinus } from 'lucide-react';
+import { InviteToSessionSheet } from '../components/InviteSheets';
 import './FriendProfile.css';
 
-function FriendProfile({ friendUserId, onStartSession }) {
+function FriendProfile({ friendUserId }) {
   const { getFriendByUserId, removeFriend } = useFriends();
   const [friend, setFriend] = useState(null);
+  const [showInvite, setShowInvite] = useState(false);
 
   useEffect(() => {
     if (friendUserId) {
@@ -25,11 +27,6 @@ function FriendProfile({ friendUserId, onStartSession }) {
     }
   };
 
-  const handleStartSession = () => {
-    if (onStartSession) {
-      onStartSession(friend);
-    }
-  };
 
   if (!friend) {
     return (
@@ -64,9 +61,9 @@ function FriendProfile({ friendUserId, onStartSession }) {
       </div>
 
       <div className="friend-profile-actions">
-        <button className="profile-action-btn primary" onClick={handleStartSession}>
-          <MessageCircle size={18} />
-          Start Reading Session
+        <button className="profile-action-btn primary" onClick={() => setShowInvite(true)}>
+          <UserPlus size={18} />
+          Invite to a session
         </button>
         <button className="profile-action-btn danger" onClick={handleRemoveFriend}>
           <UserMinus size={18} />
@@ -112,8 +109,12 @@ function FriendProfile({ friendUserId, onStartSession }) {
         <div className="friend-profile-private-notice">
           <User size={48} />
           <h3>Private Profile</h3>
-          <p>This user has a private profile. You can still start reading sessions together!</p>
+          <p>This user has a private profile. You can still invite them to read together!</p>
         </div>
+      )}
+
+      {showInvite && (
+        <InviteToSessionSheet friend={friend} onClose={() => setShowInvite(false)} />
       )}
     </div>
   );

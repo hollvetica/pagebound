@@ -42,3 +42,18 @@ export const getUnreadTimeline = (sessionId) =>
 
 export const deleteSession = (sessionId) =>
   apiJson(`/sessions/${sessionId}`, { method: 'DELETE' });
+
+// The reader has caught up on a session (clears its notification badge)
+export const markSessionSeen = (sessionId) =>
+  apiJson(`/sessions/${sessionId}/seen`, { method: 'PUT' });
+
+// Invite friends (userIds) to an existing session
+export const inviteToSession = (sessionId, userIds) =>
+  apiJson(`/sessions/${sessionId}/participants`, {
+    method: 'POST',
+    body: JSON.stringify({ userIds })
+  });
+
+// Leave a session you were invited to
+export const leaveSession = (sessionId, userId) =>
+  apiJson(`/sessions/${sessionId}/participants/${encodeURIComponent(userId)}`, { method: 'DELETE' });

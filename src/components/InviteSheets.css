@@ -1,0 +1,120 @@
+.invite-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.invite-sheet h2 {
+  margin-bottom: 0;
+}
+
+.invite-sheet-subtitle {
+  margin-top: calc(-1 * var(--space-3));
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.invite-sheet-subtitle em {
+  font-family: var(--font-heading);
+  color: var(--color-text);
+}
+
+.invite-sheet-empty {
+  padding: var(--space-5) var(--space-4);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.invite-sheet .modal-actions {
+  margin-top: 0;
+}
+
+.invite-sheet-done {
+  grid-template-columns: 1fr;
+}
+
+.invite-session-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.invite-session-list li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.invite-session-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.invite-session-option:hover:not(:disabled) {
+  background: var(--color-surface);
+}
+
+.invite-session-option:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.invite-session-cover {
+  width: 32px;
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--color-surface);
+  border-radius: var(--radius-xs);
+}
+
+.invite-session-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.invite-session-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.invite-session-text strong {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-display);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-session-text small {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+.invite-session-cta {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+}

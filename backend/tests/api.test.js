@@ -366,6 +366,97 @@ test('book stats: totals across readers, no identities', async () => {
   assert.strictEqual(anon.status, 401);
 });
 
+// ---------------------------------------------------------------- notifications
+const listFor = async (who) =>
+  (await call(sessions, 'GET', `/sessions/users/${who}/list`, { caller: who, pathParameters: { userId: who } })).body.sessions;
+
+test('notifications: invite badge, new comments since last seen, cleared by seen/post/progress', async () => {
+  const s = await annStartsWithBo();
+  const pp = { sessionId: s.sessionId };
+
+  // Host has seen it; the invitee has an invitation waiting
+  assert.deepStrictEqual((await listFor('ann'))[0].newCount, 0);
+  let bo = (await listFor('bo'))[0];
+  assert.strictEqual(bo.isNewInvite, true);
+  assert.strictEqual(bo.newCount, 1);
+
+  // Bo opens it
+  const seen = await call(sessions, 'PUT', `/sessions/${s.sessionId}/seen`, { caller: 'bo', pathParameters: pp });
+  assert.strictEqual(seen.status, 200);
+  bo = (await listFor('bo'))[0];
+  assert.strictEqual(bo.isNewInvite, false);
+  assert.strictEqual(bo.newCount, 0);
+
+  // Ann comments twice (one ahead of Bo): Bo is notified of both, and one is waiting
+  await new Promise(r => setTimeout(r, 5));
+  await call(sessions, 'POST', `/sessions/${s.sessionId}/messages`, { caller: 'ann', pathParameters: pp, body: { message: 'a', position: 0 } });
+  await call(sessions, 'POST', `/sessions/${s.sessionId}/messages`, { caller: 'ann', pathParameters: pp, body: { message: 'b', position: 4 } });
+  bo = (await listFor('bo'))[0];
+  assert.strictEqual(bo.newCount, 2);
+  assert.strictEqual(bo.waitingCount, 1);
+  assert.strictEqual((await listFor('ann'))[0].newCount, 0, 'your own comments never notify you');
+
+  // Updating progress counts as catching up
+  await new Promise(r => setTimeout(r, 5));
+  await call(sessions, 'PUT', `/sessions/${s.sessionId}/progress`, { caller: 'bo', pathParameters: pp, body: { currentChapter: 4 } });
+  bo = (await listFor('bo'))[0];
+  assert.strictEqual(bo.newCount, 0);
+  assert.strictEqual(bo.waitingCount, 0);
+
+  const outsider = await call(sessions, 'PUT', `/sessions/${s.sessionId}/seen`, { caller: 'cy', pathParameters: pp });
+  assert.strictEqual(outsider.status, 403);
+});
+
+// ---------------------------------------------------------------- invite & leave
+test('invite friends to an existing session; friends only, one session per book', async () => {
+  // Ann starts solo; Bo and Cy become Ann's friends, Cy is not Bo's
+  const solo = await call(sessions, 'POST', '/sessions', { caller: 'ann', body: book });
+  const id = solo.body.session.sessionId;
+  const pp = { sessionId: id };
+
+  const notFriend = await call(sessions, 'POST', `/sessions/${id}/participants`, { caller: 'ann', pathParameters: pp, body: { userIds: ['cy'] } });
+  assert.strictEqual(notFriend.status, 403);
+
+  const added = await call(sessions, 'POST', `/sessions/${id}/participants`, { caller: 'ann', pathParameters: pp, body: { userIds: ['bo', 'bo', 'ann'] } });
+  assert.strictEqual(added.status, 200);
+  assert.deepStrictEqual(added.body.session.participants.map(p => p.userId), ['ann', 'bo']);
+  assert.strictEqual((await listFor('bo'))[0].isNewInvite, true);
+
+  const nobodyNew = await call(sessions, 'POST', `/sessions/${id}/participants`, { caller: 'ann', pathParameters: pp, body: { userIds: ['bo'] } });
+  assert.strictEqual(nobodyNew.status, 400);
+
+  const outsider = await call(sessions, 'POST', `/sessions/${id}/participants`, { caller: 'cy', pathParameters: pp, body: { userIds: ['ann'] } });
+  assert.strictEqual(outsider.status, 403);
+
+  // Bo can't be pulled into a second session for the same book
+  db.table('pagebound-friends').set('ann|cy', { userId: 'ann', friendUserId: 'cy' });
+  db.table('pagebound-friends').set('cy|ann', { userId: 'cy', friendUserId: 'ann' });
+  db.table('pagebound-friends').set('cy|bo', { userId: 'cy', friendUserId: 'bo' });
+  const cyOwn = await call(sessions, 'POST', '/sessions', { caller: 'cy', body: book });
+  assert.strictEqual(cyOwn.status, 201, "Cy is not in Ann's session, so Cy can start one");
+  const inviteCy = await call(sessions, 'POST', `/sessions/${id}/participants`, { caller: 'ann', pathParameters: pp, body: { userIds: ['cy'] } });
+  assert.strictEqual(inviteCy.status, 409, 'Cy already has a session for this book');
+});
+
+test('invitees can leave (freeing the book); the host cannot leave; nobody can remove others', async () => {
+  const s = await annStartsWithBo();
+  const pp = (userId) => ({ sessionId: s.sessionId, userId });
+
+  const kick = await call(sessions, 'DELETE', `/sessions/${s.sessionId}/participants/bo`, { caller: 'ann', pathParameters: pp('bo') });
+  assert.strictEqual(kick.status, 403);
+  const hostLeave = await call(sessions, 'DELETE', `/sessions/${s.sessionId}/participants/ann`, { caller: 'ann', pathParameters: pp('ann') });
+  assert.strictEqual(hostLeave.status, 400);
+
+  const leave = await call(sessions, 'DELETE', `/sessions/${s.sessionId}/participants/bo`, { caller: 'bo', pathParameters: pp('bo') });
+  assert.strictEqual(leave.status, 200);
+  assert.strictEqual((await listFor('bo')).length, 0);
+  const read = await call(sessions, 'GET', `/sessions/${s.sessionId}`, { caller: 'bo', pathParameters: { sessionId: s.sessionId } });
+  assert.strictEqual(read.status, 403, 'no longer a member');
+
+  const boOwn = await call(sessions, 'POST', '/sessions', { caller: 'bo', body: book });
+  assert.strictEqual(boOwn.status, 201, 'Bo can start their own session for the book now');
+});
+
 (async () => {
   const quiet = console.log;
   let failed = 0;

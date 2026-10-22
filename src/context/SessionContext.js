@@ -24,6 +24,10 @@ export const normalizeSession = (session, myUserId) => ({
   sessionId: session.sessionId || session.id,
   trackingMode: session.trackingMode || 'chapters',
   unreadCount: session.unreadCount || 0,
+  newCount: session.newCount || 0,
+  newMessageCount: session.newMessageCount || 0,
+  waitingCount: session.waitingCount || 0,
+  isNewInvite: !!session.isNewInvite,
   unreadVisibleCount: session.unreadVisibleCount || 0,
   participants: (session.participants || []).map(p => ({
     ...p,
@@ -91,7 +95,18 @@ export const SessionProvider = ({ children }) => {
     setSessions(prev => {
       const exists = prev.some(s => s.id === normalized.id);
       return exists
-        ? prev.map(s => (s.id === normalized.id ? { ...s, ...normalized, unreadCount: s.unreadCount, unreadVisibleCount: s.unreadVisibleCount } : s))
+        // Single-session responses don't carry per-reader counts; keep the list's
+        ? prev.map(s => (s.id === normalized.id ? {
+          ...s,
+          ...normalized,
+          unreadCount: s.unreadCount,
+          unreadVisibleCount: s.unreadVisibleCount,
+          newCount: s.newCount,
+          newMessageCount: s.newMessageCount,
+          waitingCount: s.waitingCount,
+          isNewInvite: s.isNewInvite,
+          lastSeenAt: s.lastSeenAt
+        } : s))
         : [normalized, ...prev];
     });
     return normalized;
@@ -148,6 +163,43 @@ export const SessionProvider = ({ children }) => {
     setSessions(prev => prev.filter(s => s.id !== sessionId));
   };
 
+  // Clear a session's notification badge (opening its discussion, etc.)
+  const markSeen = async (sessionId) => {
+    setSessions(prev => prev.map(s => (s.id === sessionId
+      ? { ...s, newCount: 0, newMessageCount: 0, isNewInvite: false, lastSeenAt: new Date().toISOString() }
+      : s)));
+    if (preview) {
+      const saved = JSON.parse(localStorage.getItem(PREVIEW_STORAGE_KEY) || '[]');
+      localStorage.setItem(PREVIEW_STORAGE_KEY, JSON.stringify(saved.map(s => ((s.sessionId || s.id) === sessionId
+        ? { ...s, newCount: 0, newMessageCount: 0, isNewInvite: false, lastSeenAt: new Date().toISOString() }
+        : s))));
+      return;
+    }
+    try {
+      await sessionsApi.markSessionSeen(sessionId);
+    } catch (err) {
+      console.error('Error marking session seen:', err);
+    }
+  };
+
+  // Invite friends (userIds) to an existing session. Throws ApiError.
+  const inviteFriends = async (sessionId, userIds) => {
+    if (preview) return;
+    const data = await sessionsApi.inviteToSession(sessionId, userIds);
+    replaceSession(data.session);
+  };
+
+  // Leave a session you were invited to. Throws ApiError.
+  const leaveSession = async (sessionId) => {
+    if (preview) {
+      const saved = JSON.parse(localStorage.getItem(PREVIEW_STORAGE_KEY) || '[]');
+      savePreview(saved.filter(s => (s.sessionId || s.id) !== sessionId));
+      return;
+    }
+    await sessionsApi.leaveSession(sessionId, userId);
+    setSessions(prev => prev.filter(s => s.id !== sessionId));
+  };
+
   const getSessionById = (sessionId) => sessions.find(s => s.id === sessionId);
 
   // One session per book: the user's session for this book, if any
@@ -156,6 +208,9 @@ export const SessionProvider = ({ children }) => {
 
   // Comments from other readers the user hasn't read yet (across all sessions)
   const unreadTotal = sessions.reduce((sum, s) => sum + (s.unreadCount || 0), 0);
+
+  // What the Sessions tab badge shows: new comments + unopened invitations
+  const notificationTotal = sessions.reduce((sum, s) => sum + (s.newCount || 0), 0);
 
   return (
     <SessionContext.Provider value={{
@@ -168,7 +223,11 @@ export const SessionProvider = ({ children }) => {
       deleteSession,
       getSessionById,
       getSessionForBook,
-      unreadTotal
+      unreadTotal,
+      notificationTotal,
+      markSeen,
+      inviteFriends,
+      leaveSession
     }}>
       {children}
     </SessionContext.Provider>

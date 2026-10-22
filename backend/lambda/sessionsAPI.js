@@ -7,7 +7,8 @@
 //
 // Tables
 //   SESSIONS_TABLE  sessionId (HASH)                 – one item per session
-//   MEMBERS_TABLE   userId (HASH), sessionId (RANGE) – who is in which session
+//   MEMBERS_TABLE   userId (HASH), sessionId (RANGE) – who is in which session,
+//                   plus lastSeenAt (when that reader last caught up)
 //   MESSAGES_TABLE  messageId (HASH), GSI sessionId-index (sessionId, createdAt)
 //   FRIENDS_TABLE   userId (HASH), friendUserId (RANGE)
 //
@@ -15,6 +16,10 @@
 // session tracks one of them (trackingMode); comments are tagged with a
 // position in that unit and stay hidden from a reader until their own
 // progress reaches that position.
+//
+// Notifications: a session's newCount is comments from others since the
+// reader's lastSeenAt, plus 1 for an invitation they haven't opened yet.
+// Opening the discussion, posting, or updating progress marks it seen.
 
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const {
@@ -131,6 +136,41 @@ async function findSessionForBook(userId, bookIsbn) {
   return result.Items?.[0] || null;
 }
 
+// Record that the reader has caught up on a session
+async function markSeen(userId, sessionId) {
+  await dynamodb.send(new UpdateCommand({
+    TableName: MEMBERS_TABLE,
+    Key: { userId, sessionId },
+    UpdateExpression: 'SET lastSeenAt = :now',
+    ExpressionAttributeValues: { ':now': new Date().toISOString() }
+  }));
+}
+
+// Throw 409 if any of these readers already has a session for the book
+async function assertNoSessionForBook(userIds, bookIsbn, callerId) {
+  const conflicts = [];
+  for (const userId of userIds) {
+    const existing = await findSessionForBook(userId, bookIsbn);
+    if (existing) conflicts.push({ userId, sessionId: existing.sessionId });
+  }
+  if (conflicts.length) {
+    const own = conflicts.find(c => c.userId === callerId);
+    throw new HttpError(409, own
+      ? 'You already have a session for this book'
+      : conflicts.length === 1
+        ? 'A friend you invited already has a session for this book'
+        : 'Some friends you invited already have a session for this book', { conflicts });
+  }
+}
+
+async function assertAllFriends(callerId, userIds) {
+  for (const userId of userIds) {
+    if (!(await areFriends(callerId, userId))) {
+      throw new HttpError(403, 'You can only invite friends to a session');
+    }
+  }
+}
+
 async function getSessionMessages(sessionId) {
   const result = await dynamodb.send(new QueryCommand({
     TableName: MESSAGES_TABLE,
@@ -164,25 +204,9 @@ async function createSession(event, callerId) {
 
   const invitees = [...new Set(participantUserIds)].filter(id => id && id !== callerId);
 
-  // Only friends can be invited
-  for (const inviteeId of invitees) {
-    if (!(await areFriends(callerId, inviteeId))) {
-      throw new HttpError(403, 'You can only invite friends to a session');
-    }
-  }
-
-  // One session per book, per reader
-  const conflicts = [];
-  for (const userId of [callerId, ...invitees]) {
-    const existing = await findSessionForBook(userId, bookIsbn);
-    if (existing) conflicts.push({ userId, sessionId: existing.sessionId });
-  }
-  if (conflicts.length) {
-    const own = conflicts.find(c => c.userId === callerId);
-    throw new HttpError(409, own
-      ? 'You already have a session for this book'
-      : 'A friend you invited already has a session for this book', { conflicts });
-  }
+  // Only friends can be invited; one session per book, per reader
+  await assertAllFriends(callerId, invitees);
+  await assertNoSessionForBook([callerId, ...invitees], bookIsbn, callerId);
 
   const sessionId = randomUUID();
   const createdAt = new Date().toISOString();
@@ -210,7 +234,13 @@ async function createSession(event, callerId) {
   await dynamodb.send(new BatchWriteCommand({
     RequestItems: {
       [MEMBERS_TABLE]: session.participants.map(p => ({
-        PutRequest: { Item: { userId: p.userId, sessionId, bookIsbn, joinedAt: createdAt } }
+        PutRequest: {
+          Item: {
+            userId: p.userId, sessionId, bookIsbn, joinedAt: createdAt,
+            // The host has seen it; invitees get an invitation notification
+            ...(p.userId === callerId ? { lastSeenAt: createdAt } : {})
+          }
+        }
       }))
     }
   }));
@@ -234,13 +264,25 @@ async function listSessions(event, callerId) {
       if (!session) return null;
       const details = await withParticipantDetails(session);
 
-      // Comments waiting for this reader: not theirs and not yet read
       const me = session.participants.find(p => p.userId === callerId);
       const myPosition = positionOf(session, me);
-      const messages = await getSessionMessages(session.sessionId);
-      const unread = messages.filter(msg => msg.userId !== callerId && !msg.readBy?.[callerId]);
+      const fromOthers = (await getSessionMessages(session.sessionId)).filter(msg => msg.userId !== callerId);
+      const unread = fromOthers.filter(msg => !msg.readBy?.[callerId]);
+
+      // Notifications: new comments since the reader last caught up, plus an
+      // unopened invitation
+      const isNewInvite = !m.lastSeenAt;
+      const newMessages = m.lastSeenAt
+        ? fromOthers.filter(msg => msg.createdAt > m.lastSeenAt).length
+        : fromOthers.length;
+
       return {
         ...details,
+        lastSeenAt: m.lastSeenAt || null,
+        isNewInvite,
+        newCount: newMessages + (isNewInvite ? 1 : 0),
+        newMessageCount: newMessages,
+        waitingCount: fromOthers.filter(msg => messagePosition(msg) > myPosition).length,
         unreadCount: unread.length,
         unreadVisibleCount: unread.filter(msg => messagePosition(msg) <= myPosition).length
       };
@@ -287,6 +329,7 @@ async function updateProgress(event, callerId) {
     ExpressionAttributeValues: { ':participants': participants, ':updatedAt': updatedAt }
   }));
 
+  await markSeen(callerId, sessionId);
   return json(200, { session: await withParticipantDetails({ ...session, participants, updatedAt }) });
 }
 
@@ -325,6 +368,7 @@ async function postMessage(event, callerId) {
   };
 
   await dynamodb.send(new PutCommand({ TableName: MESSAGES_TABLE, Item: messageItem }));
+  await markSeen(callerId, sessionId);
   await dynamodb.send(new UpdateCommand({
     TableName: SESSIONS_TABLE,
     Key: { sessionId },
@@ -434,6 +478,76 @@ async function deleteSession(event, callerId) {
   return json(200, { ok: true });
 }
 
+// PUT /sessions/{sessionId}/seen – the reader has caught up (clears the badge)
+async function markSessionSeen(event, callerId) {
+  const sessionId = event.pathParameters.sessionId;
+  await getSessionForMember(sessionId, callerId);
+  await markSeen(callerId, sessionId);
+  return json(200, { ok: true });
+}
+
+// POST /sessions/{sessionId}/participants  { userIds: [...] }
+// Any member can invite their own friends.
+async function inviteParticipants(event, callerId) {
+  const sessionId = event.pathParameters.sessionId;
+  const session = await getSessionForMember(sessionId, callerId);
+  const body = parseBody(event);
+
+  const already = new Set(session.participants.map(p => p.userId));
+  const invitees = [...new Set(body.userIds || [])].filter(id => id && !already.has(id));
+  if (!invitees.length) throw new HttpError(400, 'Choose at least one friend who isn\'t in this session');
+  if (session.participants.length + invitees.length > 50) throw new HttpError(400, 'Sessions can have up to 50 readers');
+
+  await assertAllFriends(callerId, invitees);
+  await assertNoSessionForBook(invitees, session.bookIsbn, callerId);
+
+  const joinedAt = new Date().toISOString();
+  const participants = [
+    ...session.participants,
+    ...invitees.map(userId => ({
+      userId, isHost: false, currentChapter: 0, currentPage: 0, joinedAt, invitedBy: callerId
+    }))
+  ];
+
+  await dynamodb.send(new UpdateCommand({
+    TableName: SESSIONS_TABLE,
+    Key: { sessionId },
+    UpdateExpression: 'SET participants = :participants, updatedAt = :updatedAt',
+    ExpressionAttributeValues: { ':participants': participants, ':updatedAt': joinedAt }
+  }));
+  await dynamodb.send(new BatchWriteCommand({
+    RequestItems: {
+      [MEMBERS_TABLE]: invitees.map(userId => ({
+        PutRequest: { Item: { userId, sessionId, bookIsbn: session.bookIsbn, joinedAt } }
+      }))
+    }
+  }));
+
+  return json(200, { session: await withParticipantDetails({ ...session, participants, updatedAt: joinedAt }) });
+}
+
+// DELETE /sessions/{sessionId}/participants/{userId} – leave a session.
+// Readers can only remove themselves; the host deletes the session instead.
+async function leaveSession(event, callerId) {
+  const { sessionId, userId } = event.pathParameters;
+  if (userId !== callerId) throw new HttpError(403, 'You can only leave a session yourself');
+  const session = await getSessionForMember(sessionId, callerId);
+  if (session.hostUserId === callerId) {
+    throw new HttpError(400, 'The host can\'t leave; delete the session instead');
+  }
+
+  const participants = session.participants.filter(p => p.userId !== callerId);
+  await dynamodb.send(new UpdateCommand({
+    TableName: SESSIONS_TABLE,
+    Key: { sessionId },
+    UpdateExpression: 'SET participants = :participants, updatedAt = :updatedAt',
+    ExpressionAttributeValues: { ':participants': participants, ':updatedAt': new Date().toISOString() }
+  }));
+  await dynamodb.send(new DeleteCommand({ TableName: MEMBERS_TABLE, Key: { userId: callerId, sessionId } }));
+
+  return json(200, { ok: true });
+}
+
 // ----------------------------------------------------------------------------
 // Router
 // ----------------------------------------------------------------------------
@@ -445,6 +559,9 @@ const routes = [
   ['PUT', /^\/sessions\/[^/]+\/messages\/[^/]+\/read$/, markRead],
   ['GET', /^\/sessions\/[^/]+\/unread-timeline$/, unreadTimeline],
   ['PUT', /^\/sessions\/[^/]+\/progress$/, updateProgress],
+  ['PUT', /^\/sessions\/[^/]+\/seen$/, markSessionSeen],
+  ['POST', /^\/sessions\/[^/]+\/participants$/, inviteParticipants],
+  ['DELETE', /^\/sessions\/[^/]+\/participants\/[^/]+$/, leaveSession],
   ['GET', /^\/sessions\/[^/]+$/, getSession],
   ['DELETE', /^\/sessions\/[^/]+$/, deleteSession]
 ];

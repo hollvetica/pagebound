@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getMessages, postMessage, markMessageAsRead } from '../utils/sessionsService';
+import { Lock } from 'lucide-react';
 import { isPreviewMode } from '../utils/previewMode';
 import './Discussion.css';
+
+const REFRESH_MS = 15000;
 
 // Spoiler-free session discussion. Comments are tagged to a chapter or page
 // (whatever the session tracks). The server only sends the text of comments
@@ -13,6 +16,9 @@ function Discussion({ session, userId, onClose }) {
 
   const me = session.participants.find(p => p.isMe || p.userId === userId);
   const startPosition = (byPages ? me?.currentPage : me?.currentChapter) || 0;
+  // When the reader last caught up – comments after this are marked New.
+  // Captured once so the markers stay while the sheet is open.
+  const [seenBefore] = useState(session.isNewInvite ? null : session.lastSeenAt || null);
 
   const [visibleMessages, setVisibleMessages] = useState([]);
   const [hiddenMessages, setHiddenMessages] = useState([]);
@@ -23,8 +29,15 @@ function Discussion({ session, userId, onClose }) {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState(null);
 
-  const loadMessages = useCallback(async () => {
+  const loadMessages = useCallback(async ({ silent = false } = {}) => {
     if (isPreviewMode()) {
+      // Sample comments for UI preview: localStorage pagebound-preview-messages-<sessionId>
+      const sample = JSON.parse(localStorage.getItem(`pagebound-preview-messages-${session.sessionId}`) || 'null');
+      if (sample) {
+        setVisibleMessages(sample.visibleMessages || []);
+        setHiddenMessages(sample.hiddenMessages || []);
+        setUserPosition(sample.userPosition ?? startPosition);
+      }
       setIsLoading(false);
       return;
     }
@@ -40,14 +53,17 @@ function Discussion({ session, userId, onClose }) {
       await Promise.all(unread.map(m => markMessageAsRead(session.sessionId, m.messageId).catch(() => {})));
     } catch (err) {
       console.error('Error loading messages:', err);
-      setError('Could not load the discussion.');
+      if (!silent) setError('Could not load the discussion.');
     } finally {
       setIsLoading(false);
     }
-  }, [session.sessionId, userId]);
+  }, [session.sessionId, userId, startPosition]);
 
+  // Load now, then keep up with the conversation while the sheet is open
   useEffect(() => {
     loadMessages();
+    const interval = setInterval(() => loadMessages({ silent: true }), REFRESH_MS);
+    return () => clearInterval(interval);
   }, [loadMessages]);
 
   const handleSendMessage = async () => {
@@ -84,6 +100,22 @@ function Discussion({ session, userId, onClose }) {
 
   const positionLabel = (position) => (position === 0 ? 'General' : `${byPages ? 'p.' : 'Ch.'} ${position}`);
   const byTime = (a, b) => (a.createdAt || '').localeCompare(b.createdAt || '');
+  const isNew = (m) => m.userId !== userId && (!seenBefore || m.createdAt > seenBefore);
+
+  // Locked comments grouped by where they unlock
+  const waiting = Object.entries(
+    hiddenMessages.reduce((acc, m) => {
+      const position = m.position ?? m.chapterNumber;
+      acc[position] = (acc[position] || 0) + 1;
+      return acc;
+    }, {})
+  )
+    .map(([position, count]) => ({ position: parseInt(position, 10), count }))
+    .sort((a, b) => a.position - b.position);
+  const toGo = (position) => {
+    const n = position - userPosition;
+    return `${n} ${unit}${n !== 1 ? 's' : ''} to go`;
+  };
 
   return (
     <div className="discussion-overlay" onClick={onClose}>
@@ -116,7 +148,7 @@ function Discussion({ session, userId, onClose }) {
                   {[...visibleMessages].sort(byTime).map((message) => (
                     <div
                       key={message.messageId}
-                      className={`message-item ${message.userId === userId ? 'own-message' : ''}`}
+                      className={`message-item ${message.userId === userId ? 'own-message' : ''} ${isNew(message) ? 'is-new' : ''}`}
                     >
                       <div className="message-avatar">
                         {message.avatarUrl ? (
@@ -132,25 +164,32 @@ function Discussion({ session, userId, onClose }) {
                           <span className="message-author">{message.userId === userId ? 'You' : message.displayName}</span>
                           <span className="message-chapter-tag">{positionLabel(message.position ?? message.chapterNumber)}</span>
                           <span className="message-timestamp">{formatTimestamp(message.createdAt)}</span>
+                          {isNew(message) && <span className="message-new-tag">New</span>}
                         </div>
                         <p className="message-text">{message.message}</p>
                       </div>
                     </div>
                   ))}
 
-                  {/* Comments ahead of the reader: position only, no spoilers */}
-                  {[...hiddenMessages]
-                    .sort((a, b) => (a.position ?? a.chapterNumber) - (b.position ?? b.chapterNumber))
-                    .map((hidden) => (
-                      <div key={hidden.messageId} className="hidden-message-placeholder">
-                        <div className="speech-bubble-icon">
-                          <span className="bubble-chapter-number">{hidden.position ?? hidden.chapterNumber}</span>
+                  {/* Comments ahead of the reader: where and how many, never what */}
+                  {waiting.length > 0 && (
+                    <div className="waiting-ahead">
+                      <p className="waiting-ahead-title">Waiting for you ahead</p>
+                      {waiting.map(({ position, count }) => (
+                        <div key={position} className="hidden-message-placeholder">
+                          <div className="speech-bubble-icon">
+                            <Lock size={14} aria-hidden="true" />
+                          </div>
+                          <div className="hidden-message-body">
+                            <p className="hidden-message-text">
+                              {count} comment{count !== 1 ? 's' : ''} · Available after {unit} {position}
+                            </p>
+                            <p className="hidden-message-meta">{toGo(position)}</p>
+                          </div>
                         </div>
-                        <p className="hidden-message-text">
-                          Available after {unit} {hidden.position ?? hidden.chapterNumber}
-                        </p>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </div>

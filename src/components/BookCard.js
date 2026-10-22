@@ -5,7 +5,7 @@ import './BookCard.css';
 
 // A book on a shelf. When the reader has a session for it, the progress bar
 // shows their session progress with the participant count beside it, and a
-// badge on the cover counts comments waiting for them.
+// badge on the cover counts new comments (and an unopened invitation).
 function BookCard({ book, session, theme, onOpen, onRatingChange }) {
   let percent = null;
   if (session) {
@@ -18,7 +18,8 @@ function BookCard({ book, session, theme, onOpen, onRatingChange }) {
     percent = book.progress;
   }
 
-  const unread = session?.unreadCount || 0;
+  // Notifications for this book's session: new comments + an unopened invite
+  const unread = session?.newCount || 0;
   const readers = session?.participants?.length || 0;
 
   return (
@@ -32,7 +33,7 @@ function BookCard({ book, session, theme, onOpen, onRatingChange }) {
       <div className="book-card-cover">
         {book.coverUrl ? <img src={book.coverUrl} alt={book.title} /> : '📚'}
         {unread > 0 && (
-          <span className="book-card-badge" title={`${unread} new comment${unread !== 1 ? 's' : ''}`}>
+          <span className="book-card-badge" title={session?.isNewInvite ? "You've been invited to read this together" : `${unread} new comment${unread !== 1 ? 's' : ''}`}>
             {unread > 9 ? '9+' : unread}
           </span>
         )}
