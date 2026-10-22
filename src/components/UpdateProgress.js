@@ -2,26 +2,35 @@ import React, { useState } from 'react';
 import './UpdateProgress.css';
 
 function UpdateProgress({ session, onClose, onUpdateProgress }) {
-  const userParticipant = session.participants.find(p => p.isHost);
-  const [trackingMode, setTrackingMode] = useState(session.trackingMode || 'chapters'); // 'chapters' or 'pages'
+  // The signed-in reader's own row; the session decides chapters vs pages
+  const userParticipant = session.participants.find(p => p.isMe) || session.participants.find(p => p.isHost);
+  const trackingMode = session.trackingMode || 'chapters';
   const [currentChapter, setCurrentChapter] = useState(userParticipant?.currentChapter || 0);
   const [currentPage, setCurrentPage] = useState(userParticipant?.currentPage || 0);
+  const [error, setError] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleUpdate = () => {
-    if (trackingMode === 'chapters') {
-      if (currentChapter < 0 || currentChapter > session.totalChapters) {
-        alert(`Please enter a chapter between 0 and ${session.totalChapters}`);
-        return;
-      }
-      onUpdateProgress(session.id, 'You', currentChapter, currentPage, trackingMode);
-    } else {
-      if (currentPage < 0 || currentPage > session.totalPages) {
-        alert(`Please enter a page between 0 and ${session.totalPages}`);
-        return;
-      }
-      onUpdateProgress(session.id, 'You', currentChapter, currentPage, trackingMode);
+  const handleUpdate = async () => {
+    const value = trackingMode === 'chapters' ? currentChapter : currentPage;
+    const total = trackingMode === 'chapters' ? session.totalChapters : session.totalPages;
+    if (value < 0 || (total && value > total)) {
+      setError(`Enter a ${trackingMode === 'chapters' ? 'chapter' : 'page'} between 0 and ${total}.`);
+      return;
     }
-    onClose();
+
+    try {
+      setIsSaving(true);
+      setError(null);
+      await onUpdateProgress(
+        session.id,
+        trackingMode === 'chapters' ? { currentChapter } : { currentPage }
+      );
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Could not save your progress. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const getCurrentValue = () => trackingMode === 'chapters' ? currentChapter : currentPage;
@@ -95,24 +104,6 @@ function UpdateProgress({ session, onClose, onUpdateProgress }) {
           </div>
         </div>
 
-        {/* Tracking Mode Toggle */}
-        <div className="tracking-mode-toggle">
-          <button 
-            className={`mode-btn ${trackingMode === 'chapters' ? 'active' : ''}`}
-            onClick={() => setTrackingMode('chapters')}
-            disabled={!session.totalChapters}
-          >
-            By Chapter
-          </button>
-          <button 
-            className={`mode-btn ${trackingMode === 'pages' ? 'active' : ''}`}
-            onClick={() => setTrackingMode('pages')}
-            disabled={!session.totalPages}
-          >
-            By Page
-          </button>
-        </div>
-
         <div className="progress-input-section">
           <label>What {getLabel().toLowerCase()} are you on?</label>
           <div className="chapter-input-group">
@@ -178,12 +169,14 @@ function UpdateProgress({ session, onClose, onUpdateProgress }) {
           </div>
         </div>
 
+        {error && <div className="error-message update-progress-error">{error}</div>}
+
         <div className="progress-actions">
           <button className="cancel-btn" onClick={onClose}>
             Cancel
           </button>
-          <button className="save-btn" onClick={handleUpdate}>
-            💾 Save Progress
+          <button className="save-btn" onClick={handleUpdate} disabled={isSaving}>
+            {isSaving ? 'Saving…' : '💾 Save Progress'}
           </button>
         </div>
       </div>

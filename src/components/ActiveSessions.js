@@ -6,9 +6,16 @@ function ActiveSessions({ sessions }) {
     return null;
   }
 
-  const calculateAverageProgress = (participants) => {
-    const avgChapter = participants.reduce((sum, p) => sum + p.currentChapter, 0) / participants.length;
-    return Math.round(avgChapter);
+  // The signed-in reader's own position, in the session's unit
+  const myProgress = (session) => {
+    const byPages = session.trackingMode === 'pages';
+    const me = session.participants.find(p => p.isMe) || session.participants.find(p => p.isHost);
+    const current = (byPages ? me?.currentPage : me?.currentChapter) || 0;
+    const total = (byPages ? session.totalPages : session.totalChapters) || 0;
+    return {
+      label: `${byPages ? 'Page' : 'Chapter'} ${current} of ${total}`,
+      percent: total ? Math.min(100, Math.round((current / total) * 100)) : 0
+    };
   };
 
   return (
@@ -16,10 +23,9 @@ function ActiveSessions({ sessions }) {
       <h3>Active Reading Sessions</h3>
       <div className="sessions-list">
         {sessions.map((session) => {
-          const avgProgress = calculateAverageProgress(session.participants);
-          const progressPercent = session.totalChapters 
-            ? Math.round((avgProgress / session.totalChapters) * 100)
-            : 0;
+          const progress = myProgress(session);
+          const progressPercent = progress.percent;
+          const others = session.participants.filter(p => !p.isMe).map(p => p.name);
 
           return (
             <div key={session.id} className="session-card">
@@ -34,7 +40,7 @@ function ActiveSessions({ sessions }) {
                 <div className="session-info">
                   <h4>{session.bookTitle}</h4>
                   <p className="session-author">{session.bookAuthor}</p>
-                  <p className="session-chapter">Chapter {avgProgress} of {session.totalChapters}</p>
+                  <p className="session-chapter">{progress.label}</p>
                 </div>
               </div>
 
@@ -50,7 +56,7 @@ function ActiveSessions({ sessions }) {
 
               <div className="session-participants">
                 <span className="participants-icon">👥</span>
-                <span>Reading with {session.participants.filter(p => !p.isHost).map(p => p.name).join(', ')}</span>
+                <span>{others.length ? `Reading with ${others.join(', ')}` : 'Reading solo'}</span>
               </div>
 
               <div className="session-time">

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import BookSearch from '../components/BookSearch';
 import BookDetail from './BookDetail';
-import CreateSession from '../components/CreateSession';
 import BookRating from '../components/BookRating';
 import { useSession } from '../context/SessionContext';
 import { useTheme } from '../context/ThemeContext';
@@ -31,7 +30,6 @@ function Library() {
   
   const [myBooks, setMyBooks] = useState([]);
   const [selectedBook, setSelectedBook] = useState(null);
-  const [showCreateSession, setShowCreateSession] = useState(false);
   const [, setIsLoaded] = useState(false);
 
   // Load books from backend on mount
@@ -117,14 +115,10 @@ function Library() {
     setSelectedBook(null);
   };
 
-  const handleStartSession = (book) => {
-    setSelectedBook(null);
-    setShowCreateSession(true);
-  };
-
-  const handleCreateSession = (sessionData) => {
-    createSession(sessionData);
-    alert('Reading session created! Check your home page.');
+  // BookDetail builds the session (tracking mode, totals, invited friends).
+  // Errors (e.g. a session already exists for this book) are shown in the sheet.
+  const handleStartSession = async (sessionData) => {
+    await createSession(sessionData);
   };
 
   const handleUpdateBook = async (updatedBook) => {
@@ -263,13 +257,6 @@ function Library() {
         />
       )}
 
-      {showCreateSession && selectedBook && (
-        <CreateSession
-          book={selectedBook}
-          onClose={() => setShowCreateSession(false)}
-          onCreateSession={handleCreateSession}
-        />
-      )}
     </div>
   );
 }

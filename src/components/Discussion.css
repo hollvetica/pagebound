@@ -262,3 +262,8 @@
     max-width: none;
   }
 }
+
+.chapter-selector .chapter-input {
+  width: 96px;
+  height: var(--control-height-md);
+}

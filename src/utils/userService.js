@@ -1,9 +1,9 @@
 // User service for DynamoDB operations
-const API_ENDPOINT = process.env.REACT_APP_API_ENDPOINT;
+import { apiFetch, API_ENDPOINT } from './apiFetch';
 
 export const fetchUserProfile = async (email) => {
   try {
-    const response = await fetch(`${API_ENDPOINT}/users/${email}`);
+    const response = await apiFetch(`${API_ENDPOINT}/users/${email}`);
     if (!response.ok) throw new Error('Failed to fetch user profile');
     return await response.json();
   } catch (error) {
@@ -14,7 +14,7 @@ export const fetchUserProfile = async (email) => {
 
 export const createUserProfile = async (email, username) => {
   try {
-    const response = await fetch(`${API_ENDPOINT}/users`, {
+    const response = await apiFetch(`${API_ENDPOINT}/users`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, username, isAdmin: false })
@@ -29,7 +29,7 @@ export const createUserProfile = async (email, username) => {
 
 export const updateUsername = async (email, newUsername) => {
   try {
-    const response = await fetch(`${API_ENDPOINT}/users/${email}/username`, {
+    const response = await apiFetch(`${API_ENDPOINT}/users/${email}/username`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ newUsername })
@@ -44,7 +44,7 @@ export const updateUsername = async (email, newUsername) => {
 
 export const checkUsernameAvailable = async (username) => {
   try {
-    const response = await fetch(`${API_ENDPOINT}/users/check-username/${username}`);
+    const response = await apiFetch(`${API_ENDPOINT}/users/check-username/${username}`);
     if (!response.ok) throw new Error('Failed to check username');
     const data = await response.json();
     return data.available;
@@ -56,7 +56,7 @@ export const checkUsernameAvailable = async (username) => {
 
 export const getAllUsers = async () => {
   try {
-    const response = await fetch(`${API_ENDPOINT}/admin/users`);
+    const response = await apiFetch(`${API_ENDPOINT}/admin/users`);
     if (!response.ok) throw new Error('Failed to fetch users');
     return await response.json();
   } catch (error) {
@@ -67,7 +67,7 @@ export const getAllUsers = async () => {
 
 export const updateUserAdmin = async (email, isAdmin) => {
   try {
-    const response = await fetch(`${API_ENDPOINT}/admin/users/${email}/admin`, {
+    const response = await apiFetch(`${API_ENDPOINT}/admin/users/${email}/admin`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ isAdmin })
@@ -82,7 +82,7 @@ export const updateUserAdmin = async (email, isAdmin) => {
 
 export const sendPasswordReset = async (email) => {
   try {
-    const response = await fetch(`${API_ENDPOINT}/admin/reset-password`, {
+    const response = await apiFetch(`${API_ENDPOINT}/admin/reset-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email })

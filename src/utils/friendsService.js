@@ -1,10 +1,10 @@
 // Friends service for API operations
-const API_ENDPOINT = process.env.REACT_APP_API_ENDPOINT;
+import { apiFetch, API_ENDPOINT } from './apiFetch';
 
 // Get list of friends for a user
 export const getFriendsList = async (userId) => {
   try {
-    const response = await fetch(`${API_ENDPOINT}/friends/${userId}/list`);
+    const response = await apiFetch(`${API_ENDPOINT}/friends/${userId}/list`);
     if (!response.ok) throw new Error('Failed to fetch friends list');
     return await response.json();
   } catch (error) {
@@ -16,7 +16,7 @@ export const getFriendsList = async (userId) => {
 // Get pending friend requests (sent and received)
 export const getFriendRequests = async (userId) => {
   try {
-    const response = await fetch(`${API_ENDPOINT}/friends/${userId}/requests`);
+    const response = await apiFetch(`${API_ENDPOINT}/friends/${userId}/requests`);
     if (!response.ok) throw new Error('Failed to fetch friend requests');
     return await response.json();
   } catch (error) {
@@ -28,7 +28,7 @@ export const getFriendRequests = async (userId) => {
 // Send a friend request by username
 export const sendFriendRequest = async (userId, toUsername, message = '') => {
   try {
-    const response = await fetch(`${API_ENDPOINT}/friends/${userId}/requests`, {
+    const response = await apiFetch(`${API_ENDPOINT}/friends/${userId}/requests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ toUsername, message })
@@ -47,7 +47,7 @@ export const sendFriendRequest = async (userId, toUsername, message = '') => {
 // Accept or reject a friend request
 export const respondToFriendRequest = async (userId, fromUserId, action) => {
   try {
-    const response = await fetch(`${API_ENDPOINT}/friends/${userId}/requests/${fromUserId}`, {
+    const response = await apiFetch(`${API_ENDPOINT}/friends/${userId}/requests/${fromUserId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action }) // 'accept' or 'reject'
@@ -63,7 +63,7 @@ export const respondToFriendRequest = async (userId, fromUserId, action) => {
 // Remove a friend
 export const removeFriend = async (userId, friendUserId) => {
   try {
-    const response = await fetch(`${API_ENDPOINT}/friends/${userId}/remove/${friendUserId}`, {
+    const response = await apiFetch(`${API_ENDPOINT}/friends/${userId}/remove/${friendUserId}`, {
       method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to remove friend');
@@ -77,7 +77,7 @@ export const removeFriend = async (userId, friendUserId) => {
 // Search for users by username
 export const searchUsers = async (userId, searchQuery) => {
   try {
-    const response = await fetch(`${API_ENDPOINT}/friends/${userId}/search?q=${encodeURIComponent(searchQuery)}`);
+    const response = await apiFetch(`${API_ENDPOINT}/friends/${userId}/search?q=${encodeURIComponent(searchQuery)}`);
     if (!response.ok) throw new Error('Failed to search users');
     return await response.json();
   } catch (error) {
@@ -89,7 +89,7 @@ export const searchUsers = async (userId, searchQuery) => {
 // Create an invite link
 export const createInviteLink = async (userId, expiresInDays = null, maxUses = null) => {
   try {
-    const response = await fetch(`${API_ENDPOINT}/friends/${userId}/invite`, {
+    const response = await apiFetch(`${API_ENDPOINT}/friends/${userId}/invite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ expiresInDays, maxUses })
@@ -105,7 +105,7 @@ export const createInviteLink = async (userId, expiresInDays = null, maxUses = n
 // Get invite link info
 export const getInviteInfo = async (userId, inviteCode) => {
   try {
-    const response = await fetch(`${API_ENDPOINT}/friends/${userId}/invite/${inviteCode}`);
+    const response = await apiFetch(`${API_ENDPOINT}/friends/${userId}/invite/${inviteCode}`);
     if (!response.ok) throw new Error('Failed to fetch invite info');
     return await response.json();
   } catch (error) {

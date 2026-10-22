@@ -16,8 +16,9 @@ function Home() {
     setShowQuickSetup(true);
   };
 
-  const handleCreateQuickSession = (sessionData) => {
-    createSession(sessionData);
+  // Errors (e.g. already in a session for this book) are shown in the sheet
+  const handleCreateQuickSession = async (sessionData) => {
+    await createSession(sessionData);
     setShowQuickSetup(false);
     setSelectedActivity(null);
   };

@@ -253,3 +253,7 @@
   width: 100%;
   height: var(--control-height-lg);
 }
+
+.book-session-error {
+  margin-bottom: var(--space-3);
+}

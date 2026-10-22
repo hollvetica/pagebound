@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { getCurrentUser, signIn, signUp, signOut, confirmSignUp, resetPassword, confirmResetPassword } from 'aws-amplify/auth';
 import { fetchUserProfile, updateUsername, checkUsernameAvailable } from '../utils/userService';
 import { getAvatarUploadUrl, uploadAvatarToS3, confirmAvatarUpload, updateProfile } from '../utils/profileService';
+import { isPreviewMode } from '../utils/previewMode';
 
 const AuthContext = createContext();
 
@@ -24,9 +25,8 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const checkUser = async () => {
-    // Dev-only UI preview: open http://localhost:3000/?preview to see the
-    // signed-in screens with a placeholder user, without touching Cognito.
-    if (process.env.NODE_ENV === 'development' && window.location.search.includes('preview')) {
+    // Dev-only UI preview (see utils/previewMode.js)
+    if (isPreviewMode()) {
       setUser({ userId: 'preview-user', signInDetails: { loginId: 'preview@pagebound.test' } });
       setUserProfile({ userId: 'preview-user', email: 'preview@pagebound.test', username: 'hollie', tagline: 'Reading slowly, on purpose.', isAdmin: false });
       setLoading(false);

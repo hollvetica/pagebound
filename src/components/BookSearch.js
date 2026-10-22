@@ -79,6 +79,14 @@ function BookSearch({ onBookSelect }) {
     }
   };
 
+  // Picking a result hands the book up and closes the search
+  const handleSelect = (book) => {
+    onBookSelect(book);
+    setSearchResults([]);
+    setSearchQuery('');
+    setError(null);
+  };
+
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       handleSearch();
@@ -112,7 +120,7 @@ function BookSearch({ onBookSelect }) {
         <div className="search-results">
           <h4>Search Results ({searchResults.length})</h4>
           {searchResults.map((book) => (
-            <div key={book.isbn} className="book-result" onClick={() => onBookSelect(book)}>
+            <div key={book.isbn} className="book-result" onClick={() => handleSelect(book)}>
               <div className="book-cover-placeholder">
                 {book.coverUrl ? (
                   <img src={book.coverUrl} alt={book.title} />

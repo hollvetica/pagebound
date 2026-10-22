@@ -1,6 +1,12 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import { useAuth } from './AuthContext';
+import * as sessionsApi from '../utils/sessionsService';
+import { isPreviewMode } from '../utils/previewMode';
 
 const SessionContext = createContext();
+
+const REFRESH_INTERVAL_MS = 30000;
+const PREVIEW_STORAGE_KEY = 'pagebound-sessions';
 
 export const useSession = () => {
   const context = useContext(SessionContext);
@@ -10,65 +16,159 @@ export const useSession = () => {
   return context;
 };
 
+// Shape every session the same way for the UI:
+//   id (= sessionId), participants[].name, participants[].isMe
+export const normalizeSession = (session, myUserId) => ({
+  ...session,
+  id: session.sessionId || session.id,
+  sessionId: session.sessionId || session.id,
+  trackingMode: session.trackingMode || 'chapters',
+  unreadCount: session.unreadCount || 0,
+  unreadVisibleCount: session.unreadVisibleCount || 0,
+  participants: (session.participants || []).map(p => ({
+    ...p,
+    name: p.displayName || p.username || p.name || 'Reader',
+    isMe: myUserId ? p.userId === myUserId : p.name === 'You',
+    currentChapter: p.currentChapter || 0,
+    currentPage: p.currentPage || 0
+  }))
+});
+
 export const SessionProvider = ({ children }) => {
-  const [sessions, setSessions] = useState(() => {
-    const savedSessions = localStorage.getItem('pagebound-sessions');
-    return savedSessions ? JSON.parse(savedSessions) : [];
-  });
+  const { userProfile } = useAuth();
+  const userId = userProfile?.userId;
+  const preview = isPreviewMode();
 
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // ---- Load ----------------------------------------------------------------
+  const refreshSessions = useCallback(async () => {
+    if (preview) {
+      const saved = JSON.parse(localStorage.getItem(PREVIEW_STORAGE_KEY) || '[]');
+      setSessions(saved.map(s => normalizeSession(s, userId)));
+      return;
+    }
+    if (!userId) {
+      setSessions([]);
+      return;
+    }
+    try {
+      setLoading(true);
+      const data = await sessionsApi.getUserSessions(userId);
+      setSessions((data.sessions || []).map(s => normalizeSession(s, userId)));
+      setError(null);
+    } catch (err) {
+      console.error('Error loading sessions:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [preview, userId]);
+
+  // Load on sign-in, then keep fresh while the app is open
   useEffect(() => {
-    localStorage.setItem('pagebound-sessions', JSON.stringify(sessions));
-  }, [sessions]);
+    refreshSessions();
+    if (preview || !userId) return undefined;
 
-  const createSession = (sessionData) => {
-    setSessions([...sessions, sessionData]);
+    const interval = setInterval(refreshSessions, REFRESH_INTERVAL_MS);
+    const onFocus = () => refreshSessions();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [preview, userId, refreshSessions]);
+
+  const savePreview = (next) => {
+    localStorage.setItem(PREVIEW_STORAGE_KEY, JSON.stringify(next));
+    setSessions(next.map(s => normalizeSession(s, userId)));
   };
 
-  const updateSession = (sessionId, updates) => {
-    setSessions(sessions.map(session => 
-      session.id === sessionId 
-        ? { ...session, ...updates }
-        : session
-    ));
+  const replaceSession = (session) => {
+    const normalized = normalizeSession(session, userId);
+    setSessions(prev => {
+      const exists = prev.some(s => s.id === normalized.id);
+      return exists
+        ? prev.map(s => (s.id === normalized.id ? { ...s, ...normalized, unreadCount: s.unreadCount, unreadVisibleCount: s.unreadVisibleCount } : s))
+        : [normalized, ...prev];
+    });
+    return normalized;
   };
 
-  const deleteSession = (sessionId) => {
-    setSessions(sessions.filter(session => session.id !== sessionId));
+  // ---- Actions -------------------------------------------------------------
+
+  // sessionData: { sessionName, bookTitle, bookAuthor, bookCover, bookIsbn,
+  //   totalChapters, totalPages, trackingMode, participantUserIds }
+  // Throws ApiError (409 when a reader already has a session for the book).
+  const createSession = async (sessionData) => {
+    if (preview) {
+      const now = new Date().toISOString();
+      const session = {
+        ...sessionData,
+        sessionId: `preview-${Date.now()}`,
+        createdAt: now,
+        updatedAt: now,
+        participants: [{ userId, displayName: 'You', isHost: true, currentChapter: 0, currentPage: 0 }]
+      };
+      const saved = JSON.parse(localStorage.getItem(PREVIEW_STORAGE_KEY) || '[]');
+      savePreview([session, ...saved]);
+      return normalizeSession(session, userId);
+    }
+    const data = await sessionsApi.createSession(sessionData);
+    return replaceSession(data.session);
   };
 
-  const updateParticipantProgress = (sessionId, participantName, newChapter, newPage, trackingMode) => {
-    setSessions(sessions.map(session => {
-      if (session.id === sessionId) {
-        return {
-          ...session,
-          trackingMode: trackingMode || session.trackingMode,
-          participants: session.participants.map(participant =>
-            participant.name === participantName
-              ? { 
-                  ...participant, 
-                  currentChapter: newChapter,
-                  currentPage: newPage || participant.currentPage || 0
-                }
-              : participant
-          )
-        };
-      }
-      return session;
-    }));
+  // Update the signed-in user's own progress
+  const updateMyProgress = async (sessionId, { currentChapter, currentPage }) => {
+    if (preview) {
+      const saved = JSON.parse(localStorage.getItem(PREVIEW_STORAGE_KEY) || '[]');
+      savePreview(saved.map(s => ((s.sessionId || s.id) !== sessionId ? s : {
+        ...s,
+        participants: s.participants.map(p => (
+          (userId ? p.userId === userId : p.name === 'You') || p.isHost
+            ? { ...p, currentChapter: currentChapter ?? p.currentChapter, currentPage: currentPage ?? p.currentPage }
+            : p
+        ))
+      })));
+      return;
+    }
+    const data = await sessionsApi.updateProgress(sessionId, { currentChapter, currentPage });
+    replaceSession(data.session);
   };
 
-  const getSessionById = (sessionId) => {
-    return sessions.find(session => session.id === sessionId);
+  const deleteSession = async (sessionId) => {
+    if (preview) {
+      const saved = JSON.parse(localStorage.getItem(PREVIEW_STORAGE_KEY) || '[]');
+      savePreview(saved.filter(s => (s.sessionId || s.id) !== sessionId));
+      return;
+    }
+    await sessionsApi.deleteSession(sessionId);
+    setSessions(prev => prev.filter(s => s.id !== sessionId));
   };
+
+  const getSessionById = (sessionId) => sessions.find(s => s.id === sessionId);
+
+  // One session per book: the user's session for this book, if any
+  const getSessionForBook = (bookIsbn) =>
+    bookIsbn ? sessions.find(s => s.bookIsbn === bookIsbn) : undefined;
+
+  // Comments from other readers the user hasn't read yet (across all sessions)
+  const unreadTotal = sessions.reduce((sum, s) => sum + (s.unreadCount || 0), 0);
 
   return (
-    <SessionContext.Provider value={{ 
-      sessions, 
-      createSession, 
-      updateSession, 
+    <SessionContext.Provider value={{
+      sessions,
+      loading,
+      error,
+      refreshSessions,
+      createSession,
+      updateMyProgress,
       deleteSession,
-      updateParticipantProgress,
-      getSessionById
+      getSessionById,
+      getSessionForBook,
+      unreadTotal
     }}>
       {children}
     </SessionContext.Provider>

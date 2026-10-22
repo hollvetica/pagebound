@@ -1,5 +1,5 @@
 // Profile service for managing user profile operations
-const API_ENDPOINT = process.env.REACT_APP_API_ENDPOINT;
+import { apiFetch, API_ENDPOINT } from './apiFetch';
 
 /**
  * Get presigned URL for avatar upload
@@ -8,7 +8,7 @@ const API_ENDPOINT = process.env.REACT_APP_API_ENDPOINT;
  * @returns {Promise<{uploadUrl: string, imageUrl: string, expiresIn: number}>}
  */
 export const getAvatarUploadUrl = async (email, fileType) => {
-  const response = await fetch(`${API_ENDPOINT}/users/${encodeURIComponent(email)}/avatar-upload-url`, {
+  const response = await apiFetch(`${API_ENDPOINT}/users/${encodeURIComponent(email)}/avatar-upload-url`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -51,7 +51,7 @@ export const uploadAvatarToS3 = async (presignedUrl, file) => {
  * @returns {Promise<{success: boolean, avatarUrl: string}>}
  */
 export const confirmAvatarUpload = async (email, imageUrl) => {
-  const response = await fetch(`${API_ENDPOINT}/users/${encodeURIComponent(email)}/avatar-confirm`, {
+  const response = await apiFetch(`${API_ENDPOINT}/users/${encodeURIComponent(email)}/avatar-confirm`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -77,7 +77,7 @@ export const confirmAvatarUpload = async (email, imageUrl) => {
  * @returns {Promise<{success: boolean}>}
  */
 export const updateProfile = async (email, updates) => {
-  const response = await fetch(`${API_ENDPOINT}/users/${encodeURIComponent(email)}/profile`, {
+  const response = await apiFetch(`${API_ENDPOINT}/users/${encodeURIComponent(email)}/profile`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json'
@@ -99,7 +99,7 @@ export const updateProfile = async (email, updates) => {
  * @returns {Promise<{chaptersCompleted: number, booksRead: number, totalBooks: number, joinedDate: string}>}
  */
 export const getUserStats = async (email) => {
-  const response = await fetch(`${API_ENDPOINT}/users/${encodeURIComponent(email)}/stats`);
+  const response = await apiFetch(`${API_ENDPOINT}/users/${encodeURIComponent(email)}/stats`);
 
   if (!response.ok) {
     const error = await response.json();

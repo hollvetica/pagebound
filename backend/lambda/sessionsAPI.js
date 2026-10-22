@@ -1,42 +1,112 @@
 // sessionsAPI Lambda Function
-// Handles all session and discussion-related API requests via API Gateway
+// Shared reading sessions and spoiler-gated discussions.
+//
+// Every request is authenticated by the API Gateway Cognito authorizer; the
+// caller is always taken from the token (claims.sub), never from the request
+// body or query string.
+//
+// Tables
+//   SESSIONS_TABLE  sessionId (HASH)                 – one item per session
+//   MEMBERS_TABLE   userId (HASH), sessionId (RANGE) – who is in which session
+//   MESSAGES_TABLE  messageId (HASH), GSI sessionId-index (sessionId, createdAt)
+//   FRIENDS_TABLE   userId (HASH), friendUserId (RANGE)
+//
+// Progress is tracked per participant as currentChapter / currentPage. A
+// session tracks one of them (trackingMode); comments are tagged with a
+// position in that unit and stay hidden from a reader until their own
+// progress reaches that position.
 
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand, QueryCommand, UpdateCommand, BatchGetCommand } = require("@aws-sdk/lib-dynamodb");
+const {
+  DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand, QueryCommand,
+  UpdateCommand, BatchWriteCommand
+} = require("@aws-sdk/lib-dynamodb");
 const { randomUUID } = require('crypto');
 
 const client = new DynamoDBClient({});
 const dynamodb = DynamoDBDocumentClient.from(client);
 
-// Helper function to get user by userId
-async function getUserByUserId(userId) {
-  const result = await dynamodb.send(new QueryCommand({
-    TableName: process.env.USERS_TABLE,
-    IndexName: 'userId-index',
-    KeyConditionExpression: 'userId = :userId',
-    ExpressionAttributeValues: {
-      ':userId': userId
-    }
-  }));
+const SESSIONS_TABLE = process.env.SESSIONS_TABLE;
+const MEMBERS_TABLE = process.env.MEMBERS_TABLE;
+const MESSAGES_TABLE = process.env.MESSAGES_TABLE;
+const USERS_TABLE = process.env.USERS_TABLE;
+const FRIENDS_TABLE = process.env.FRIENDS_TABLE;
 
-  return result.Items && result.Items.length > 0 ? result.Items[0] : null;
+class HttpError extends Error {
+  constructor(statusCode, message, extra = {}) {
+    super(message);
+    this.statusCode = statusCode;
+    this.extra = extra;
+  }
 }
 
-// Helper function to get session with participants
-async function getSessionWithDetails(sessionId) {
-  const sessionResult = await dynamodb.send(new GetCommand({
-    TableName: process.env.SESSIONS_TABLE,
+const json = (statusCode, body) => ({ statusCode, body: JSON.stringify(body) });
+
+function getCallerId(event) {
+  const callerId = event.requestContext?.authorizer?.claims?.sub;
+  if (!callerId) throw new HttpError(401, 'Not signed in');
+  return callerId;
+}
+
+function parseBody(event) {
+  try {
+    return event.body ? JSON.parse(event.body) : {};
+  } catch {
+    throw new HttpError(400, 'Invalid JSON body');
+  }
+}
+
+const toNumber = (value) => {
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+};
+
+async function getUserByUserId(userId) {
+  const result = await dynamodb.send(new QueryCommand({
+    TableName: USERS_TABLE,
+    IndexName: 'userId-index',
+    KeyConditionExpression: 'userId = :userId',
+    ExpressionAttributeValues: { ':userId': userId }
+  }));
+  return result.Items?.[0] || null;
+}
+
+async function areFriends(userId, friendUserId) {
+  const result = await dynamodb.send(new GetCommand({
+    TableName: FRIENDS_TABLE,
+    Key: { userId, friendUserId }
+  }));
+  return !!result.Item;
+}
+
+async function getSessionItem(sessionId) {
+  const result = await dynamodb.send(new GetCommand({
+    TableName: SESSIONS_TABLE,
     Key: { sessionId }
   }));
+  return result.Item || null;
+}
 
-  if (!sessionResult.Item) {
-    return null;
+// Load a session and make sure the caller is in it
+async function getSessionForMember(sessionId, callerId) {
+  const session = await getSessionItem(sessionId);
+  if (!session) throw new HttpError(404, 'Session not found');
+  if (!session.participants.some(p => p.userId === callerId)) {
+    throw new HttpError(403, 'You are not in this session');
   }
+  return session;
+}
 
-  const session = sessionResult.Item;
+// A participant's position in the session's tracking unit
+function positionOf(session, participant) {
+  if (!participant) return 0;
+  return session.trackingMode === 'pages'
+    ? toNumber(participant.currentPage)
+    : toNumber(participant.currentChapter);
+}
 
-  // Fetch participant details
-  const participantDetails = await Promise.all(
+async function withParticipantDetails(session) {
+  const participants = await Promise.all(
     session.participants.map(async (p) => {
       const user = await getUserByUserId(p.userId);
       return {
@@ -47,397 +117,360 @@ async function getSessionWithDetails(sessionId) {
       };
     })
   );
-
-  return {
-    ...session,
-    participants: participantDetails
-  };
+  return { ...session, participants };
 }
 
-exports.handler = async (event) => {
-  console.log('Received event:', JSON.stringify(event, null, 2));
+// The user's existing session for a book, if any (one session per book)
+async function findSessionForBook(userId, bookIsbn) {
+  const result = await dynamodb.send(new QueryCommand({
+    TableName: MEMBERS_TABLE,
+    KeyConditionExpression: 'userId = :userId',
+    FilterExpression: 'bookIsbn = :isbn',
+    ExpressionAttributeValues: { ':userId': userId, ':isbn': bookIsbn }
+  }));
+  return result.Items?.[0] || null;
+}
 
-  const httpMethod = event.httpMethod;
-  const path = event.path;
-  const pathParameters = event.pathParameters || {};
-  const queryStringParameters = event.queryStringParameters || {};
+async function getSessionMessages(sessionId) {
+  const result = await dynamodb.send(new QueryCommand({
+    TableName: MESSAGES_TABLE,
+    IndexName: 'sessionId-index',
+    KeyConditionExpression: 'sessionId = :sessionId',
+    ExpressionAttributeValues: { ':sessionId': sessionId }
+  }));
+  return result.Items || [];
+}
 
-  let response;
+// Messages carry `position`; older items only had `chapterNumber`
+const messagePosition = (m) => toNumber(m.position ?? m.chapterNumber);
 
-  try {
-    // ========================================
-    // POST /sessions - Create new session
-    // ========================================
-    if (httpMethod === 'POST' && path === '/sessions') {
-      const body = JSON.parse(event.body);
-      const {
-        sessionName,
-        bookTitle,
-        bookAuthor,
-        bookCover,
-        bookIsbn,
-        totalChapters,
-        totalPages,
-        trackingMode,
-        hostUserId,
-        participantUserIds
-      } = body;
+// ----------------------------------------------------------------------------
+// Handlers
+// ----------------------------------------------------------------------------
 
-      const sessionId = randomUUID();
-      const createdAt = new Date().toISOString();
+// POST /sessions
+async function createSession(event, callerId) {
+  const body = parseBody(event);
+  const {
+    sessionName, bookTitle, bookAuthor, bookCover, bookIsbn,
+    totalChapters, totalPages, trackingMode = 'chapters',
+    participantUserIds = []
+  } = body;
 
-      // Create participants array with host first
-      const participants = [
-        {
-          userId: hostUserId,
-          currentChapter: 0,
-          currentPage: 0,
-          isHost: true,
-          joinedAt: createdAt
-        },
-        ...participantUserIds.map(userId => ({
-          userId,
-          currentChapter: 0,
-          currentPage: 0,
-          isHost: false,
-          joinedAt: createdAt
-        }))
-      ];
+  if (!bookIsbn || !bookTitle) throw new HttpError(400, 'bookIsbn and bookTitle are required');
+  if (!['chapters', 'pages'].includes(trackingMode)) throw new HttpError(400, 'trackingMode must be chapters or pages');
+  const total = trackingMode === 'pages' ? toNumber(totalPages) : toNumber(totalChapters);
+  if (!total) throw new HttpError(400, `Set the total ${trackingMode} to start a session`);
 
-      const session = {
-        sessionId,
-        sessionName,
-        bookTitle,
-        bookAuthor,
-        bookCover: bookCover || null,
-        bookIsbn,
-        totalChapters,
-        totalPages: totalPages || null,
-        trackingMode: trackingMode || 'chapters',
-        participants,
-        createdAt,
-        updatedAt: createdAt
-      };
+  const invitees = [...new Set(participantUserIds)].filter(id => id && id !== callerId);
 
-      await dynamodb.send(new PutCommand({
-        TableName: process.env.SESSIONS_TABLE,
-        Item: session
-      }));
-
-      const sessionWithDetails = await getSessionWithDetails(sessionId);
-
-      response = {
-        statusCode: 200,
-        body: JSON.stringify({ session: sessionWithDetails })
-      };
+  // Only friends can be invited
+  for (const inviteeId of invitees) {
+    if (!(await areFriends(callerId, inviteeId))) {
+      throw new HttpError(403, 'You can only invite friends to a session');
     }
-
-    // ========================================
-    // GET /sessions/{userId}/list - Get user's sessions
-    // ========================================
-    else if (httpMethod === 'GET' && path.match(/\/sessions\/[^/]+\/list$/)) {
-      const userId = pathParameters.userId;
-
-      // Query all sessions (we'll filter in application since participants is a list)
-      const sessionsResult = await dynamodb.send(new QueryCommand({
-        TableName: process.env.SESSIONS_TABLE,
-        IndexName: 'hostUserId-index',
-        KeyConditionExpression: 'hostUserId = :userId',
-        ExpressionAttributeValues: {
-          ':userId': userId
-        }
-      }));
-
-      // Also scan for sessions where user is a participant (not efficient for large datasets)
-      const allSessionsResult = await dynamodb.send(new QueryCommand({
-        TableName: process.env.SESSIONS_TABLE,
-        IndexName: 'bookIsbn-index',
-        KeyConditionExpression: 'bookIsbn = :isbn',
-        ExpressionAttributeValues: {
-          ':isbn': 'dummy' // This needs a better approach
-        }
-      }));
-
-      // For now, let's use a simpler approach - scan and filter
-      // In production, consider maintaining a user-sessions mapping table
-      const sessions = await Promise.all(
-        (sessionsResult.Items || []).map(session => getSessionWithDetails(session.sessionId))
-      );
-
-      response = {
-        statusCode: 200,
-        body: JSON.stringify({ sessions })
-      };
-    }
-
-    // ========================================
-    // GET /sessions/{sessionId} - Get session details
-    // ========================================
-    else if (httpMethod === 'GET' && path.match(/\/sessions\/[^/]+$/)) {
-      const sessionId = pathParameters.sessionId;
-      const session = await getSessionWithDetails(sessionId);
-
-      if (!session) {
-        response = {
-          statusCode: 404,
-          body: JSON.stringify({ error: 'Session not found' })
-        };
-      } else {
-        response = {
-          statusCode: 200,
-          body: JSON.stringify({ session })
-        };
-      }
-    }
-
-    // ========================================
-    // PUT /sessions/{sessionId}/progress - Update participant progress
-    // ========================================
-    else if (httpMethod === 'PUT' && path.match(/\/sessions\/[^/]+\/progress$/)) {
-      const sessionId = pathParameters.sessionId;
-      const body = JSON.parse(event.body);
-      const { userId, currentChapter, currentPage } = body;
-
-      // Get the session
-      const sessionResult = await dynamodb.send(new GetCommand({
-        TableName: process.env.SESSIONS_TABLE,
-        Key: { sessionId }
-      }));
-
-      if (!sessionResult.Item) {
-        response = {
-          statusCode: 404,
-          body: JSON.stringify({ error: 'Session not found' })
-        };
-      } else {
-        const session = sessionResult.Item;
-
-        // Update the specific participant's progress
-        const updatedParticipants = session.participants.map(p =>
-          p.userId === userId
-            ? { ...p, currentChapter, currentPage: currentPage || p.currentPage }
-            : p
-        );
-
-        await dynamodb.send(new UpdateCommand({
-          TableName: process.env.SESSIONS_TABLE,
-          Key: { sessionId },
-          UpdateExpression: 'SET participants = :participants, updatedAt = :updatedAt',
-          ExpressionAttributeValues: {
-            ':participants': updatedParticipants,
-            ':updatedAt': new Date().toISOString()
-          }
-        }));
-
-        const updatedSession = await getSessionWithDetails(sessionId);
-
-        response = {
-          statusCode: 200,
-          body: JSON.stringify({ session: updatedSession })
-        };
-      }
-    }
-
-    // ========================================
-    // POST /sessions/{sessionId}/messages - Post message to discussion
-    // ========================================
-    else if (httpMethod === 'POST' && path.match(/\/sessions\/[^/]+\/messages$/)) {
-      const sessionId = pathParameters.sessionId;
-      const body = JSON.parse(event.body);
-      const { userId, message, chapterNumber } = body;
-
-      const messageId = randomUUID();
-      const createdAt = new Date().toISOString();
-
-      // Get user details
-      const user = await getUserByUserId(userId);
-
-      const messageItem = {
-        messageId,
-        sessionId,
-        userId,
-        username: user?.username || 'Unknown',
-        displayName: user?.displayName || user?.username || 'Unknown',
-        avatarUrl: user?.avatarUrl || null,
-        message,
-        chapterNumber,
-        createdAt,
-        // Initialize read status - empty map, will be populated as users read
-        readBy: {} // { userId: timestamp }
-      };
-
-      await dynamodb.send(new PutCommand({
-        TableName: process.env.MESSAGES_TABLE,
-        Item: messageItem
-      }));
-
-      response = {
-        statusCode: 200,
-        body: JSON.stringify({ message: messageItem })
-      };
-    }
-
-    // ========================================
-    // GET /sessions/{sessionId}/messages - Get messages for session
-    // ========================================
-    else if (httpMethod === 'GET' && path.match(/\/sessions\/[^/]+\/messages$/)) {
-      const sessionId = pathParameters.sessionId;
-      const userId = queryStringParameters.userId; // Used to filter based on user's progress
-
-      // Get session to check user's progress
-      const session = await getSessionWithDetails(sessionId);
-
-      if (!session) {
-        response = {
-          statusCode: 404,
-          body: JSON.stringify({ error: 'Session not found' })
-        };
-      } else {
-        // Find user's current chapter
-        const userParticipant = session.participants.find(p => p.userId === userId);
-        const userCurrentChapter = userParticipant?.currentChapter || 0;
-
-        // Query all messages for this session
-        const messagesResult = await dynamodb.send(new QueryCommand({
-          TableName: process.env.MESSAGES_TABLE,
-          IndexName: 'sessionId-index',
-          KeyConditionExpression: 'sessionId = :sessionId',
-          ExpressionAttributeValues: {
-            ':sessionId': sessionId
-          }
-        }));
-
-        const allMessages = messagesResult.Items || [];
-
-        // Separate messages into visible and hidden
-        const visibleMessages = allMessages.filter(m => m.chapterNumber <= userCurrentChapter);
-        const hiddenMessages = allMessages.filter(m => m.chapterNumber > userCurrentChapter);
-
-        response = {
-          statusCode: 200,
-          body: JSON.stringify({
-            visibleMessages,
-            hiddenMessages: hiddenMessages.map(m => ({
-              messageId: m.messageId,
-              chapterNumber: m.chapterNumber,
-              createdAt: m.createdAt,
-              isRead: m.readBy?.[userId] ? true : false
-            })),
-            userCurrentChapter
-          })
-        };
-      }
-    }
-
-    // ========================================
-    // PUT /sessions/{sessionId}/messages/{messageId}/read - Mark message as read
-    // ========================================
-    else if (httpMethod === 'PUT' && path.match(/\/sessions\/[^/]+\/messages\/[^/]+\/read$/)) {
-      const { sessionId, messageId } = pathParameters;
-      const body = JSON.parse(event.body);
-      const { userId } = body;
-
-      const readAt = new Date().toISOString();
-
-      await dynamodb.send(new UpdateCommand({
-        TableName: process.env.MESSAGES_TABLE,
-        Key: { messageId },
-        UpdateExpression: 'SET readBy.#userId = :readAt',
-        ExpressionAttributeNames: {
-          '#userId': userId
-        },
-        ExpressionAttributeValues: {
-          ':readAt': readAt
-        }
-      }));
-
-      response = {
-        statusCode: 200,
-        body: JSON.stringify({ message: 'Message marked as read' })
-      };
-    }
-
-    // ========================================
-    // GET /sessions/{sessionId}/unread-timeline - Get unread message indicators for timeline
-    // ========================================
-    else if (httpMethod === 'GET' && path.match(/\/sessions\/[^/]+\/unread-timeline$/)) {
-      const sessionId = pathParameters.sessionId;
-      const userId = queryStringParameters.userId;
-
-      // Get all messages for this session
-      const messagesResult = await dynamodb.send(new QueryCommand({
-        TableName: process.env.MESSAGES_TABLE,
-        IndexName: 'sessionId-index',
-        KeyConditionExpression: 'sessionId = :sessionId',
-        ExpressionAttributeValues: {
-          ':sessionId': sessionId
-        }
-      }));
-
-      const allMessages = messagesResult.Items || [];
-
-      // Filter to unread messages for this user
-      const unreadMessages = allMessages.filter(m => !m.readBy?.[userId]);
-
-      // Group by chapter and count
-      const unreadByChapter = unreadMessages.reduce((acc, m) => {
-        if (!acc[m.chapterNumber]) {
-          acc[m.chapterNumber] = 0;
-        }
-        acc[m.chapterNumber]++;
-        return acc;
-      }, {});
-
-      response = {
-        statusCode: 200,
-        body: JSON.stringify({ unreadByChapter })
-      };
-    }
-
-    // ========================================
-    // DELETE /sessions/{sessionId} - Delete session
-    // ========================================
-    else if (httpMethod === 'DELETE' && path.match(/\/sessions\/[^/]+$/)) {
-      const sessionId = pathParameters.sessionId;
-
-      await dynamodb.send(new DeleteCommand({
-        TableName: process.env.SESSIONS_TABLE,
-        Key: { sessionId }
-      }));
-
-      // Note: In production, also delete associated messages
-      // This would require querying and batch deleting messages
-
-      response = {
-        statusCode: 200,
-        body: JSON.stringify({ message: 'Session deleted successfully' })
-      };
-    }
-
-    // ========================================
-    // Endpoint not found
-    // ========================================
-    else {
-      response = {
-        statusCode: 404,
-        body: JSON.stringify({ error: 'Endpoint not found', path, method: httpMethod })
-      };
-    }
-
-  } catch (error) {
-    console.error('Error:', error);
-    response = {
-      statusCode: 500,
-      body: JSON.stringify({ error: error.message, stack: error.stack })
-    };
   }
 
-  // Add CORS headers
+  // One session per book, per reader
+  const conflicts = [];
+  for (const userId of [callerId, ...invitees]) {
+    const existing = await findSessionForBook(userId, bookIsbn);
+    if (existing) conflicts.push({ userId, sessionId: existing.sessionId });
+  }
+  if (conflicts.length) {
+    const own = conflicts.find(c => c.userId === callerId);
+    throw new HttpError(409, own
+      ? 'You already have a session for this book'
+      : 'A friend you invited already has a session for this book', { conflicts });
+  }
+
+  const sessionId = randomUUID();
+  const createdAt = new Date().toISOString();
+  const participant = (userId, isHost) => ({
+    userId, isHost, currentChapter: 0, currentPage: 0, joinedAt: createdAt
+  });
+
+  const session = {
+    sessionId,
+    sessionName: sessionName || bookTitle,
+    bookTitle,
+    bookAuthor: bookAuthor || '',
+    bookCover: bookCover || null,
+    bookIsbn,
+    totalChapters: toNumber(totalChapters) || null,
+    totalPages: toNumber(totalPages) || null,
+    trackingMode,
+    hostUserId: callerId,
+    participants: [participant(callerId, true), ...invitees.map(id => participant(id, false))],
+    createdAt,
+    updatedAt: createdAt
+  };
+
+  await dynamodb.send(new PutCommand({ TableName: SESSIONS_TABLE, Item: session }));
+  await dynamodb.send(new BatchWriteCommand({
+    RequestItems: {
+      [MEMBERS_TABLE]: session.participants.map(p => ({
+        PutRequest: { Item: { userId: p.userId, sessionId, bookIsbn, joinedAt: createdAt } }
+      }))
+    }
+  }));
+
+  return json(201, { session: await withParticipantDetails(session) });
+}
+
+// GET /sessions/users/{userId}/list
+async function listSessions(event, callerId) {
+  if (event.pathParameters.userId !== callerId) throw new HttpError(403, 'You can only list your own sessions');
+
+  const members = await dynamodb.send(new QueryCommand({
+    TableName: MEMBERS_TABLE,
+    KeyConditionExpression: 'userId = :userId',
+    ExpressionAttributeValues: { ':userId': callerId }
+  }));
+
+  const sessions = (await Promise.all(
+    (members.Items || []).map(async (m) => {
+      const session = await getSessionItem(m.sessionId);
+      if (!session) return null;
+      const details = await withParticipantDetails(session);
+
+      // Comments waiting for this reader: not theirs and not yet read
+      const me = session.participants.find(p => p.userId === callerId);
+      const myPosition = positionOf(session, me);
+      const messages = await getSessionMessages(session.sessionId);
+      const unread = messages.filter(msg => msg.userId !== callerId && !msg.readBy?.[callerId]);
+      return {
+        ...details,
+        unreadCount: unread.length,
+        unreadVisibleCount: unread.filter(msg => messagePosition(msg) <= myPosition).length
+      };
+    })
+  )).filter(Boolean);
+
+  sessions.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+  return json(200, { sessions });
+}
+
+// GET /sessions/{sessionId}
+async function getSession(event, callerId) {
+  const session = await getSessionForMember(event.pathParameters.sessionId, callerId);
+  return json(200, { session: await withParticipantDetails(session) });
+}
+
+// PUT /sessions/{sessionId}/progress  – the caller's own progress
+async function updateProgress(event, callerId) {
+  const sessionId = event.pathParameters.sessionId;
+  const session = await getSessionForMember(sessionId, callerId);
+  const body = parseBody(event);
+
+  const clamp = (value, max) => {
+    const n = toNumber(value);
+    return max ? Math.min(n, max) : n;
+  };
+
+  const participants = session.participants.map(p =>
+    p.userId === callerId
+      ? {
+          ...p,
+          currentChapter: body.currentChapter !== undefined ? clamp(body.currentChapter, session.totalChapters) : p.currentChapter,
+          currentPage: body.currentPage !== undefined ? clamp(body.currentPage, session.totalPages) : p.currentPage,
+          progressUpdatedAt: new Date().toISOString()
+        }
+      : p
+  );
+
+  const updatedAt = new Date().toISOString();
+  await dynamodb.send(new UpdateCommand({
+    TableName: SESSIONS_TABLE,
+    Key: { sessionId },
+    UpdateExpression: 'SET participants = :participants, updatedAt = :updatedAt',
+    ExpressionAttributeValues: { ':participants': participants, ':updatedAt': updatedAt }
+  }));
+
+  return json(200, { session: await withParticipantDetails({ ...session, participants, updatedAt }) });
+}
+
+// POST /sessions/{sessionId}/messages
+async function postMessage(event, callerId) {
+  const sessionId = event.pathParameters.sessionId;
+  const session = await getSessionForMember(sessionId, callerId);
+  const body = parseBody(event);
+
+  const text = (body.message || '').trim();
+  if (!text) throw new HttpError(400, 'Message is empty');
+  if (text.length > 2000) throw new HttpError(400, 'Message is too long');
+
+  const me = session.participants.find(p => p.userId === callerId);
+  const position = body.position !== undefined || body.chapterNumber !== undefined
+    ? toNumber(body.position ?? body.chapterNumber)
+    : positionOf(session, me);
+  const total = session.trackingMode === 'pages' ? session.totalPages : session.totalChapters;
+  if (total && position > total) throw new HttpError(400, `Position must be between 0 and ${total}`);
+
+  const user = await getUserByUserId(callerId);
+  const createdAt = new Date().toISOString();
+  const messageItem = {
+    messageId: randomUUID(),
+    sessionId,
+    userId: callerId,
+    username: user?.username || 'Unknown',
+    displayName: user?.displayName || user?.username || 'Unknown',
+    avatarUrl: user?.avatarUrl || null,
+    message: text,
+    position,
+    chapterNumber: position, // kept for older clients
+    unit: session.trackingMode,
+    createdAt,
+    readBy: { [callerId]: createdAt }
+  };
+
+  await dynamodb.send(new PutCommand({ TableName: MESSAGES_TABLE, Item: messageItem }));
+  await dynamodb.send(new UpdateCommand({
+    TableName: SESSIONS_TABLE,
+    Key: { sessionId },
+    UpdateExpression: 'SET updatedAt = :updatedAt, lastMessageAt = :updatedAt',
+    ExpressionAttributeValues: { ':updatedAt': createdAt }
+  }));
+
+  return json(201, { message: messageItem });
+}
+
+// GET /sessions/{sessionId}/messages
+// Visible: the caller's own messages and anything at or before their position.
+// Hidden messages only reveal where they are, never what they say or who wrote them.
+async function getMessages(event, callerId) {
+  const sessionId = event.pathParameters.sessionId;
+  const session = await getSessionForMember(sessionId, callerId);
+  const me = session.participants.find(p => p.userId === callerId);
+  const myPosition = positionOf(session, me);
+
+  const messages = (await getSessionMessages(sessionId))
+    .map(m => ({ ...m, position: messagePosition(m) }));
+
+  const isVisible = (m) => m.userId === callerId || m.position <= myPosition;
+  const visibleMessages = messages.filter(isVisible);
+  const hiddenMessages = messages
+    .filter(m => !isVisible(m))
+    .map(m => ({
+      messageId: m.messageId,
+      position: m.position,
+      chapterNumber: m.position,
+      createdAt: m.createdAt
+    }));
+
+  return json(200, {
+    trackingMode: session.trackingMode,
+    userPosition: myPosition,
+    userCurrentChapter: myPosition, // kept for older clients
+    visibleMessages,
+    hiddenMessages
+  });
+}
+
+// PUT /sessions/{sessionId}/messages/{messageId}/read
+async function markRead(event, callerId) {
+  const { sessionId, messageId } = event.pathParameters;
+  const session = await getSessionForMember(sessionId, callerId);
+
+  const result = await dynamodb.send(new GetCommand({ TableName: MESSAGES_TABLE, Key: { messageId } }));
+  const message = result.Item;
+  if (!message || message.sessionId !== sessionId) throw new HttpError(404, 'Message not found');
+
+  const me = session.participants.find(p => p.userId === callerId);
+  if (message.userId !== callerId && messagePosition(message) > positionOf(session, me)) {
+    throw new HttpError(403, 'You have not reached this message yet');
+  }
+
+  await dynamodb.send(new UpdateCommand({
+    TableName: MESSAGES_TABLE,
+    Key: { messageId },
+    UpdateExpression: 'SET readBy.#userId = :readAt',
+    ExpressionAttributeNames: { '#userId': callerId },
+    ExpressionAttributeValues: { ':readAt': new Date().toISOString() }
+  }));
+
+  return json(200, { ok: true });
+}
+
+// GET /sessions/{sessionId}/unread-timeline – unread comments grouped by position
+async function unreadTimeline(event, callerId) {
+  const sessionId = event.pathParameters.sessionId;
+  await getSessionForMember(sessionId, callerId);
+
+  const unreadByPosition = (await getSessionMessages(sessionId))
+    .filter(m => m.userId !== callerId && !m.readBy?.[callerId])
+    .reduce((acc, m) => {
+      const position = messagePosition(m);
+      acc[position] = (acc[position] || 0) + 1;
+      return acc;
+    }, {});
+
+  return json(200, { unreadByPosition, unreadByChapter: unreadByPosition });
+}
+
+// DELETE /sessions/{sessionId} – host only; removes members and messages too
+async function deleteSession(event, callerId) {
+  const sessionId = event.pathParameters.sessionId;
+  const session = await getSessionForMember(sessionId, callerId);
+  if (session.hostUserId !== callerId && !session.participants.find(p => p.userId === callerId)?.isHost) {
+    throw new HttpError(403, 'Only the host can delete a session');
+  }
+
+  const messages = await getSessionMessages(sessionId);
+  const deletes = [
+    ...session.participants.map(p => ({ table: MEMBERS_TABLE, key: { userId: p.userId, sessionId } })),
+    ...messages.map(m => ({ table: MESSAGES_TABLE, key: { messageId: m.messageId } }))
+  ];
+  for (let i = 0; i < deletes.length; i += 25) {
+    const batch = deletes.slice(i, i + 25);
+    const requestItems = {};
+    batch.forEach(({ table, key }) => {
+      (requestItems[table] = requestItems[table] || []).push({ DeleteRequest: { Key: key } });
+    });
+    await dynamodb.send(new BatchWriteCommand({ RequestItems: requestItems }));
+  }
+  await dynamodb.send(new DeleteCommand({ TableName: SESSIONS_TABLE, Key: { sessionId } }));
+
+  return json(200, { ok: true });
+}
+
+// ----------------------------------------------------------------------------
+// Router
+// ----------------------------------------------------------------------------
+const routes = [
+  ['POST', /^\/sessions$/, createSession],
+  ['GET', /^\/sessions\/users\/[^/]+\/list$/, listSessions],
+  ['GET', /^\/sessions\/[^/]+\/messages$/, getMessages],
+  ['POST', /^\/sessions\/[^/]+\/messages$/, postMessage],
+  ['PUT', /^\/sessions\/[^/]+\/messages\/[^/]+\/read$/, markRead],
+  ['GET', /^\/sessions\/[^/]+\/unread-timeline$/, unreadTimeline],
+  ['PUT', /^\/sessions\/[^/]+\/progress$/, updateProgress],
+  ['GET', /^\/sessions\/[^/]+$/, getSession],
+  ['DELETE', /^\/sessions\/[^/]+$/, deleteSession]
+];
+
+exports.handler = async (event) => {
+  console.log('Request:', event.httpMethod, event.path);
+
+  let response;
+  try {
+    const route = routes.find(([method, pattern]) => method === event.httpMethod && pattern.test(event.path));
+    if (!route) throw new HttpError(404, 'Endpoint not found');
+    event.pathParameters = event.pathParameters || {};
+    response = await route[2](event, getCallerId(event));
+  } catch (error) {
+    if (error instanceof HttpError) {
+      response = json(error.statusCode, { error: error.message, ...error.extra });
+    } else {
+      console.error('Error:', error);
+      response = json(500, { error: 'Something went wrong' });
+    }
+  }
+
   response.headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type,Authorization',
     'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
   };
-
   return response;
 };

@@ -46,9 +46,24 @@ exports.handler = async (event) => {
 
   try {
     // ========================================
+    // Auth: the Cognito authorizer has verified the token; the caller may
+    // only act as themselves. Looking up an invite link is the exception.
+    // ========================================
+    const callerId = event.requestContext?.authorizer?.claims?.sub;
+    const isInviteLookup = httpMethod === 'GET' && /\/friends\/[^/]+\/invite\/[^/]+$/.test(path);
+    if (!callerId) {
+      response = { statusCode: 401, body: JSON.stringify({ error: 'Not signed in' }) };
+    } else if (pathParameters.userId && pathParameters.userId !== callerId && !isInviteLookup) {
+      response = { statusCode: 403, body: JSON.stringify({ error: 'You can only act on your own account' }) };
+    }
+
+    if (response) {
+      // Rejected above
+    }
+    // ========================================
     // GET /friends/{userId}/list - Get friends list
     // ========================================
-    if (httpMethod === 'GET' && path.match(/\/friends\/[^/]+\/list$/)) {
+    else if (httpMethod === 'GET' && path.match(/\/friends\/[^/]+\/list$/)) {
       const userId = pathParameters.userId;
 
       // Query friends where user is the primary
@@ -542,7 +557,7 @@ exports.handler = async (event) => {
     console.error('Error:', error);
     response = {
       statusCode: 500,
-      body: JSON.stringify({ error: error.message, stack: error.stack })
+      body: JSON.stringify({ error: 'Something went wrong' })
     };
   }
 

@@ -7,7 +7,7 @@ import ParticipantTimeline from '../components/ParticipantTimeline';
 import './Sessions.css';
 
 function Sessions() {
-  const { sessions, updateParticipantProgress } = useSession();
+  const { sessions, updateMyProgress, refreshSessions } = useSession();
   const { userProfile } = useAuth();
   const [showUpdateProgress, setShowUpdateProgress] = useState(false);
   const [showDiscussion, setShowDiscussion] = useState(false);
@@ -23,8 +23,9 @@ function Sessions() {
     setShowDiscussion(true);
   };
 
-  const handleSaveProgress = (sessionId, participantName, newChapter) => {
-    updateParticipantProgress(sessionId, participantName, newChapter);
+  // progress: { currentChapter, currentPage } for the signed-in reader
+  const handleSaveProgress = async (sessionId, progress) => {
+    await updateMyProgress(sessionId, progress);
   };
 
   const calculateGroupRating = (session) => {
@@ -77,7 +78,9 @@ function Sessions() {
                     )}
                     <div className="session-meta">
                       <span className="meta-item">
-                        📖 {session.totalChapters} chapters
+                        📖 {session.trackingMode === 'pages'
+                          ? `${session.totalPages} pages`
+                          : `${session.totalChapters} chapters`}
                       </span>
                       <span className="meta-item">
                         👥 {session.participants.length} reader{session.participants.length !== 1 ? 's' : ''}
@@ -144,6 +147,7 @@ function Sessions() {
           onClose={() => {
             setShowDiscussion(false);
             setSelectedSession(null);
+            refreshSessions(); // clears unread counts for what was just read
           }}
         />
       )}

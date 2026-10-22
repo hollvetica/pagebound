@@ -1,66 +1,53 @@
 import React, { useEffect, useState } from 'react';
 import { getUnreadTimeline } from '../utils/sessionsService';
+import { isPreviewMode } from '../utils/previewMode';
 import './ParticipantTimeline.css';
 
+// One reader's progress through the session. On the signed-in reader's own
+// row, signposts mark unread comments further ahead (spoiler-free: only the
+// position is shown).
 function ParticipantTimeline({ participant, session, currentUserId }) {
-  const [unreadByChapter, setUnreadByChapter] = useState({});
-  const [isLoading, setIsLoading] = useState(true);
+  const [unreadByPosition, setUnreadByPosition] = useState({});
+
+  const isMine = participant.isMe || participant.userId === currentUserId;
+  const byPages = session.trackingMode === 'pages';
+  const unitLabel = byPages ? 'Page' : 'Chapter';
+  const total = (byPages ? session.totalPages : session.totalChapters) || 0;
+  const current = (byPages ? participant.currentPage : participant.currentChapter) || 0;
+  const percent = total ? Math.min(100, Math.round((current / total) * 100)) : 0;
 
   useEffect(() => {
-    loadUnreadTimeline();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.sessionId, currentUserId]);
+    if (!isMine || isPreviewMode()) return;
+    let cancelled = false;
+    getUnreadTimeline(session.sessionId)
+      .then(data => { if (!cancelled) setUnreadByPosition(data.unreadByPosition || data.unreadByChapter || {}); })
+      .catch(error => console.error('Error loading unread timeline:', error));
+    return () => { cancelled = true; };
+  }, [isMine, session.sessionId, session.updatedAt]);
 
-  const loadUnreadTimeline = async () => {
-    try {
-      setIsLoading(true);
-      const data = await getUnreadTimeline(session.sessionId, currentUserId);
-      setUnreadByChapter(data.unreadByChapter || {});
-    } catch (error) {
-      console.error('Error loading unread timeline:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const participantPercent = session.totalChapters
-    ? Math.round((participant.currentChapter / session.totalChapters) * 100)
-    : 0;
-
-  // Calculate positions of unread message signposts
-  const getSignpostPosition = (chapter) => {
-    return (chapter / session.totalChapters) * 100;
-  };
-
-  // Only show unread signposts for chapters beyond the current participant's progress
-  // and only for the current user viewing their own timeline
-  const shouldShowSignpost = (chapter) => {
-    return (
-      currentUserId === participant.userId &&
-      parseInt(chapter) > participant.currentChapter &&
-      unreadByChapter[chapter] > 0
-    );
-  };
+  const signposts = Object.entries(unreadByPosition)
+    .map(([position, count]) => [parseInt(position, 10), count])
+    .filter(([position, count]) => count > 0 && position > current && total);
 
   return (
     <div className="participant-timeline-container">
       <div className="participant-info">
         <div className="participant-avatar">
           {participant.avatarUrl ? (
-            <img src={participant.avatarUrl} alt={participant.displayName} />
+            <img src={participant.avatarUrl} alt={participant.name} />
           ) : (
             <div className="avatar-placeholder-small">
-              {participant.displayName?.charAt(0).toUpperCase() || participant.name?.charAt(0).toUpperCase() || '?'}
+              {participant.name?.charAt(0).toUpperCase() || '?'}
             </div>
           )}
         </div>
         <div className="participant-details">
           <span className="participant-name">
-            {participant.displayName || participant.name}
+            {isMine ? 'You' : participant.name}
             {participant.isHost && <span className="host-badge-small">Host</span>}
           </span>
           <span className="participant-progress-text">
-            Chapter {participant.currentChapter} · {participantPercent}%
+            {unitLabel} {current} · {percent}%
           </span>
         </div>
       </div>
@@ -69,30 +56,24 @@ function ParticipantTimeline({ participant, session, currentUserId }) {
         <div className="timeline-progress-bar">
           <div
             className="timeline-progress-fill"
-            style={{ width: `${participantPercent}%` }}
+            style={{ width: `${percent}%` }}
           />
         </div>
 
-        {/* Unread message signposts */}
-        {!isLoading && Object.keys(unreadByChapter).map((chapter) => {
-          if (!shouldShowSignpost(chapter)) return null;
-
-          const position = getSignpostPosition(parseInt(chapter));
-
-          return (
-            <div
-              key={chapter}
-              className="timeline-signpost"
-              style={{ left: `${position}%` }}
-              title={`${unreadByChapter[chapter]} unread message(s) at Chapter ${chapter}`}
-            >
-              <div className="signpost-bubble">
-                <span className="signpost-chapter">{chapter}</span>
-              </div>
-              <div className="signpost-line"></div>
+        {/* Unread comments ahead of this reader */}
+        {signposts.map(([position, count]) => (
+          <div
+            key={position}
+            className="timeline-signpost"
+            style={{ left: `${Math.min(100, (position / total) * 100)}%` }}
+            title={`${count} comment${count !== 1 ? 's' : ''} waiting at ${unitLabel.toLowerCase()} ${position}`}
+          >
+            <div className="signpost-bubble">
+              <span className="signpost-chapter">{position}</span>
             </div>
-          );
-        })}
+            <div className="signpost-line"></div>
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 // Library service for managing user's book library
-const API_ENDPOINT = process.env.REACT_APP_API_ENDPOINT;
+import { apiFetch, API_ENDPOINT } from './apiFetch';
 
 /**
  * Get user's library books
@@ -12,7 +12,7 @@ export const getLibraryBooks = async (userId, shelf = null) => {
     ? `${API_ENDPOINT}/library/${userId}/books?shelf=${encodeURIComponent(shelf)}`
     : `${API_ENDPOINT}/library/${userId}/books`;
 
-  const response = await fetch(url);
+  const response = await apiFetch(url);
 
   if (!response.ok) {
     const error = await response.json();
@@ -38,7 +38,7 @@ export const getLibraryBooks = async (userId, shelf = null) => {
  * @returns {Promise<{success: boolean}>}
  */
 export const addBookToLibrary = async (userId, book) => {
-  const response = await fetch(`${API_ENDPOINT}/library/${userId}/books`, {
+  const response = await apiFetch(`${API_ENDPOINT}/library/${userId}/books`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -67,7 +67,7 @@ export const addBookToLibrary = async (userId, book) => {
  * @returns {Promise<{success: boolean}>}
  */
 export const updateLibraryBook = async (userId, isbn, updates) => {
-  const response = await fetch(`${API_ENDPOINT}/library/${userId}/books/${encodeURIComponent(isbn)}`, {
+  const response = await apiFetch(`${API_ENDPOINT}/library/${userId}/books/${encodeURIComponent(isbn)}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json'
@@ -90,7 +90,7 @@ export const updateLibraryBook = async (userId, isbn, updates) => {
  * @returns {Promise<{success: boolean}>}
  */
 export const removeLibraryBook = async (userId, isbn) => {
-  const response = await fetch(`${API_ENDPOINT}/library/${userId}/books/${encodeURIComponent(isbn)}`, {
+  const response = await apiFetch(`${API_ENDPOINT}/library/${userId}/books/${encodeURIComponent(isbn)}`, {
     method: 'DELETE'
   });
 
@@ -108,7 +108,7 @@ export const removeLibraryBook = async (userId, isbn) => {
  * @returns {Promise<{totalBooks: number, currentlyReading: number, wantToRead: number, booksRead: number, chaptersCompleted: number}>}
  */
 export const getLibraryStats = async (userId) => {
-  const response = await fetch(`${API_ENDPOINT}/library/${userId}/stats`);
+  const response = await apiFetch(`${API_ENDPOINT}/library/${userId}/stats`);
 
   if (!response.ok) {
     const error = await response.json();

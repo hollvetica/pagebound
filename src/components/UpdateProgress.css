@@ -224,3 +224,7 @@
 .quick-jump-btn:hover {
   border-color: var(--color-border-strong);
 }
+
+.update-progress-error {
+  margin-bottom: var(--space-3);
+}
