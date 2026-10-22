@@ -20,6 +20,8 @@ process.env.SHELVES_TABLE = 'pagebound-shelves';
 process.env.ACTIVITY_TABLE = 'pagebound-activity';
 process.env.RECOMMENDATIONS_TABLE = 'pagebound-recommendations';
 process.env.REACTIONS_TABLE = 'pagebound-reactions';
+process.env.REVIEWS_TABLE = 'pagebound-reviews';
+process.env.AVATAR_BUCKET = 'test-avatars';
 
 const db = require('./fakeDynamo');
 const sessions = require('../lambda/sessionsAPI');
@@ -559,6 +561,132 @@ test('public library: friends see public shelves with books; private hidden; str
   assert.strictEqual((await lib('cy', 'bo')).status, 403);
   db.table('pagebound-users').get('bo@test').isPrivate = true;
   assert.deepStrictEqual((await lib('ann', 'bo')).body, { isPrivate: true, shelves: [] });
+});
+
+// ---------------------------------------------------------------- reviews
+const reviewsOf = async (who, isbn) =>
+  (await call(social, 'GET', `/books/${isbn}/reviews`, { caller: who, pathParameters: { isbn } })).body;
+const review = (who, isbn, rating, text) => call(social, 'PUT', `/books/${isbn}/reviews/mine`, {
+  caller: who, pathParameters: { isbn }, body: { rating, text, book: { title: `Book ${isbn}`, author: 'A' } }
+});
+
+test('reviews: validated, one per reader, sync library rating, first one goes to the feed', async () => {
+  assert.strictEqual((await review('bo', '111', 6, 'x')).status, 400);
+  assert.strictEqual((await review('bo', '111', 3, 'y'.repeat(2001))).status, 400);
+
+  await addBook('bo', '111');
+  const first = await review('bo', '111', 4, '  Strange and lovely.  ');
+  assert.strictEqual(first.status, 200);
+  assert.strictEqual(first.body.review.text, 'Strange and lovely.');
+  const lib = (await call(library, 'GET', '/library/bo/books', { caller: 'bo', pathParameters: { userId: 'bo' } })).body.books[0];
+  assert.strictEqual(lib.rating, 4, 'library rating follows the review');
+
+  await review('bo', '111', 5, 'Changed my mind: a masterpiece.');
+  const notInLibrary = await review('bo', '999', 3, 'Borrowed it.');
+  assert.strictEqual(notInLibrary.status, 200);
+  assert.strictEqual(db.table('pagebound-library').has('bo|999'), false, 'reviewing does not add the book');
+
+  const feed = (await feedOf('ann')).items.filter(i => i.type === 'book_reviewed');
+  assert.deepStrictEqual(feed.map(i => `${i.book.isbn}:${i.review.rating}`).sort(), ['111:4', '999:3'], 'edits do not post again');
+
+  const all = await reviewsOf('ann', '111');
+  assert.strictEqual(all.count, 1);
+  assert.strictEqual(all.average, 5);
+  assert.strictEqual(all.reviews[0].text, 'Changed my mind: a masterpiece.');
+  assert.strictEqual(all.reviews[0].author.displayName, 'Bo');
+  assert.strictEqual(all.mine, null);
+  assert.strictEqual((await reviewsOf('bo', '111')).mine.rating, 5);
+});
+
+test('reviews: private profiles are anonymous; profile lists are friends-only', async () => {
+  await review('bo', '111', 4, 'Good.');
+  await review('cy', '111', 2, 'Not for me.');
+  db.table('pagebound-users').get('cy@test').isPrivate = true;
+
+  const list = await reviewsOf('ann', '111');
+  assert.deepStrictEqual(list.reviews.map(r => r.author.displayName).sort(), ['A Pagebound reader', 'Bo']);
+  assert.ok(list.reviews.every(r => r.author.userId !== 'cy'), 'no id for anonymous reviewers');
+  assert.strictEqual((await reviewsOf('cy', '111')).mine.author.displayName, 'Cy', 'you always see yourself');
+
+  const byBo = (who) => call(social, 'GET', '/reviews/by/bo', { caller: who, pathParameters: { userId: 'bo' } });
+  assert.strictEqual((await byBo('ann')).body.reviews.length, 1);
+  assert.strictEqual((await byBo('cy')).status, 403);
+  db.table('pagebound-users').get('bo@test').isPrivate = true;
+  assert.deepStrictEqual((await byBo('ann')).body, { isPrivate: true, reviews: [] });
+  assert.strictEqual((await byBo('bo')).body.reviews.length, 1, 'your own list is always visible');
+
+  const del = await call(social, 'DELETE', '/books/111/reviews/mine', { caller: 'bo', pathParameters: { isbn: '111' } });
+  assert.strictEqual(del.status, 200);
+  assert.strictEqual((await reviewsOf('ann', '111')).count, 1);
+});
+
+// ---------------------------------------------------------------- profile
+const userCall = (method, who, proxy, body) =>
+  call(userApi, method, `/users/${proxy}`, { caller: who, pathParameters: { proxy }, body });
+
+test('profile: edit own tagline / favorites / privacy only; validated', async () => {
+  const ok = await userCall('PUT', 'ann', 'ann@test/profile', {
+    tagline: '  Reading slowly.  ', isPrivate: true,
+    favoriteBooks: [{ isbn: '1', title: 'Circe', author: 'Miller', shelf: 'x', extra: 'y' }, { title: 'no isbn' }]
+  });
+  assert.strictEqual(ok.status, 200);
+  assert.strictEqual(ok.body.profile.tagline, 'Reading slowly.');
+  assert.strictEqual(ok.body.profile.isPrivate, true);
+  assert.deepStrictEqual(ok.body.profile.favoriteBooks, [{ isbn: '1', title: 'Circe', author: 'Miller', coverUrl: null }]);
+
+  assert.strictEqual((await userCall('PUT', 'bo', 'ann@test/profile', { tagline: 'hacked' })).status, 403);
+  assert.strictEqual((await userCall('PUT', 'ann', 'ann@test/profile', { tagline: 'x'.repeat(256) })).status, 400);
+  assert.strictEqual((await userCall('PUT', 'ann', 'ann@test/profile', { favoriteBooks: new Array(11).fill({ isbn: '1', title: 't' }) })).status, 400);
+  assert.strictEqual((await userCall('PUT', 'ann', 'ann@test/profile', {})).status, 400);
+});
+
+test('profile: stats from the real library and friends', async () => {
+  await addBook('ann', '1', { shelf: 'Finished', totalChapters: 10 });
+  await addBook('ann', '2', { shelf: 'Currently Reading' });
+  const stats = await userCall('GET', 'ann', 'ann@test/stats');
+  assert.strictEqual(stats.status, 200);
+  assert.deepStrictEqual(
+    { ...stats.body, joinedDate: undefined },
+    { totalBooks: 2, booksRead: 1, currentlyReading: 1, chaptersCompleted: 10, friendsCount: 1, joinedDate: undefined }
+  );
+  assert.strictEqual((await userCall('GET', 'bo', 'ann@test/stats')).status, 403);
+});
+
+test('avatar: real images only, size-capped, own only; replaces the old file', async () => {
+  const png = 'data:image/png;base64,' + Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64)]).toString('base64');
+  const jpeg = 'data:image/jpeg;base64,' + Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64)]).toString('base64');
+  const fake = 'data:image/png;base64,' + Buffer.from('<svg onload=alert(1)>').toString('base64');
+
+  assert.strictEqual((await userCall('POST', 'ann', 'ann@test/avatar', { imageData: fake })).status, 400, 'content is checked, not the label');
+  assert.strictEqual((await userCall('POST', 'ann', 'ann@test/avatar', { imageData: 'https://evil.example/x.png' })).status, 400);
+  const big = 'data:image/jpeg;base64,' + Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(1024 * 1024)]).toString('base64');
+  assert.strictEqual((await userCall('POST', 'ann', 'ann@test/avatar', { imageData: big })).status, 400);
+  assert.strictEqual((await userCall('POST', 'bo', 'ann@test/avatar', { imageData: png })).status, 403);
+  db.table('pagebound-users').set('ghost@test', { email: 'ghost@test' });
+  const ghost = await call(userApi, 'POST', '/users/ghost@test/avatar', {
+    caller: 'ghost', pathParameters: { proxy: 'ghost@test/avatar' }, body: { imageData: png }
+  });
+  assert.strictEqual(ghost.status, 404, 'no userId: clean error, not a crash');
+  assert.strictEqual(ghost.headers['Access-Control-Allow-Origin'], '*');
+
+  const first = await userCall('POST', 'ann', 'ann@test/avatar', { imageData: png });
+  assert.strictEqual(first.status, 200);
+  assert.ok(first.body.avatarUrl.startsWith('https://test-avatars.s3.'), first.body.avatarUrl);
+  assert.ok(first.body.avatarUrl.includes('/avatars/ann/') && first.body.avatarUrl.endsWith('.png'));
+  assert.strictEqual(db.s3Objects.size, 1);
+
+  await new Promise(r => setTimeout(r, 5));
+  const second = await userCall('POST', 'ann', 'ann@test/avatar', { imageData: jpeg });
+  assert.ok(second.body.avatarUrl.endsWith('.jpg'));
+  assert.strictEqual(db.s3Objects.size, 1, 'the old photo is removed');
+  assert.strictEqual(db.table('pagebound-users').get('ann@test').avatarUrl, second.body.avatarUrl);
+});
+
+test('friend library includes their public profile bits', async () => {
+  db.table('pagebound-users').get('bo@test').tagline = 'Hi';
+  db.table('pagebound-users').get('bo@test').favoriteBooks = [{ isbn: '1', title: 'Circe' }];
+  const r = await call(library, 'GET', '/library/bo/public', { caller: 'ann', pathParameters: { userId: 'bo' } });
+  assert.deepStrictEqual(r.body.profile, { tagline: 'Hi', favoriteBooks: [{ isbn: '1', title: 'Circe' }] });
 });
 
 (async () => {

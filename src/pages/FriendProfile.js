@@ -4,6 +4,8 @@ import { User, Users, BookOpen, UserPlus, UserMinus } from 'lucide-react';
 import { InviteToSessionSheet } from '../components/InviteSheets';
 import { useSession } from '../context/SessionContext';
 import { getFriendLibrary } from '../utils/libraryService';
+import { getUserReviews } from '../utils/socialService';
+import { ReviewCard } from '../components/Reviews';
 import { isPreviewMode } from '../utils/previewMode';
 import './FriendProfile.css';
 
@@ -12,7 +14,21 @@ function FriendProfile({ friendUserId, onNavigate }) {
   const { sessions } = useSession();
   const [friend, setFriend] = useState(null);
   const [showInvite, setShowInvite] = useState(false);
-  const [library, setLibrary] = useState(null); // { isPrivate, shelves } once loaded
+  const [library, setLibrary] = useState(null); // { isPrivate, profile, shelves } once loaded
+  const [reviews, setReviews] = useState(null);
+
+  // Their reviews
+  useEffect(() => {
+    if (!friendUserId || isPreviewMode()) {
+      setReviews([]);
+      return undefined;
+    }
+    let cancelled = false;
+    getUserReviews(friendUserId)
+      .then(d => { if (!cancelled) setReviews(d.reviews || []); })
+      .catch(() => { if (!cancelled) setReviews([]); });
+    return () => { cancelled = true; };
+  }, [friendUserId]);
 
   // Their public shelves
   useEffect(() => {
@@ -79,6 +95,9 @@ function FriendProfile({ friendUserId, onNavigate }) {
         </div>
         <h2>{friend.friendDisplayName}</h2>
         <p className="friend-profile-username">@{friend.friendUsername}</p>
+        {library?.profile?.tagline && (
+          <p className="friend-profile-tagline">“{library.profile.tagline}”</p>
+        )}
         {friend.isPrivate && (
           <p className="friend-profile-private">
             <User size={14} />
@@ -138,6 +157,35 @@ function FriendProfile({ friendUserId, onNavigate }) {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {library?.profile?.favoriteBooks?.length > 0 && (
+            <div className="friend-profile-section">
+              <h3>Favorite books</h3>
+              <div className="friend-shelf-row">
+                {library.profile.favoriteBooks.map(book => (
+                  <div key={book.isbn} className="friend-shelf-book" title={book.title}>
+                    <div className="friend-shelf-cover">
+                      {book.coverUrl ? <img src={book.coverUrl} alt="" /> : '📚'}
+                    </div>
+                    <p>{book.title}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="friend-profile-section friend-profile-reviews">
+            <h3>Reviews{reviews?.length ? <span className="profile-section-count">{reviews.length}</span> : null}</h3>
+            {!reviews ? (
+              <p className="friend-shelves-loading">Loading…</p>
+            ) : reviews.length === 0 ? (
+              <p className="friend-shelves-loading">{friend.friendDisplayName} hasn't reviewed any books yet.</p>
+            ) : (
+              <div className="profile-reviews-list">
+                {reviews.map(r => <ReviewCard key={r.isbn} review={r} showBook />)}
               </div>
             )}
           </div>

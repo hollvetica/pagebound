@@ -271,3 +271,18 @@
   font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
 }
+
+/* Your review */
+.book-my-review {
+  margin-bottom: var(--space-6);
+}
+
+.book-my-review h3 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-body);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}

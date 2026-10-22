@@ -3,6 +3,7 @@ import { useFriends } from '../context/FriendsContext';
 import { useSession } from '../context/SessionContext';
 import { STATUS_SHELF_NAMES, statusOf } from '../utils/shelves';
 import RecommendSheet from '../components/RecommendSheet';
+import { MyReviewEditor } from '../components/Reviews';
 import './BookDetail.css';
 
 function BookDetail({ book, customShelves = [], onClose, onStartSession, onUpdateBook, onOpenSession }) {
@@ -166,6 +167,14 @@ function BookDetail({ book, customShelves = [], onClose, onStartSession, onUpdat
               </div>
             </div>
           )}
+        </div>
+
+        <div className="book-my-review">
+          <h3>Your review</h3>
+          <MyReviewEditor
+            book={book}
+            onRated={(rating) => onUpdateBook && onUpdateBook({ ...book, rating })}
+          />
         </div>
 
         {(selectedShelf === 'Currently Reading' || selectedShelf === 'Finished') && (

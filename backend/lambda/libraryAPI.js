@@ -459,7 +459,12 @@ async function publicLibrary(event, callerId) {
     }))
     .filter(s => s.books.length > 0);
 
-  return json(200, { isPrivate: false, shelves: visible });
+  const ownerItem = owner.Items?.[0] || {};
+  return json(200, {
+    isPrivate: false,
+    profile: { tagline: ownerItem.tagline || '', favoriteBooks: ownerItem.favoriteBooks || [] },
+    shelves: visible
+  });
 }
 
 // ---------------------------------------------------------------- book stats

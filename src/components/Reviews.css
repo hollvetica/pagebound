@@ -1,0 +1,161 @@
+.review-stars {
+  display: inline-flex;
+  gap: 1px;
+  color: var(--color-border-strong);
+  line-height: 1;
+}
+
+.review-stars .is-on {
+  color: var(--color-primary);
+}
+
+.review-stars.is-sm { font-size: var(--font-size-xs); }
+.review-stars.is-md { font-size: var(--font-size-base); }
+
+.review-muted {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+.review-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.review-summary strong {
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+}
+
+.book-reviews {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.book-reviews > .link-button {
+  align-self: flex-start;
+}
+
+.review-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.review-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.review-card-avatar {
+  width: var(--avatar-size-sm);
+  height: var(--avatar-size-sm);
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  font-size: var(--font-size-sm);
+}
+
+.review-card-cover {
+  width: 32px;
+  height: 48px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: var(--radius-xs);
+}
+
+.review-card-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.review-card-who strong {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.review-card-who .review-card-title {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-display);
+}
+
+.review-card-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+.review-card-text {
+  font-size: var(--font-size-base);
+  line-height: 1.55;
+  color: var(--color-text);
+  white-space: pre-line;
+}
+
+.review-card-more {
+  align-self: flex-start;
+  font-size: var(--font-size-xs);
+}
+
+/* Writing your own */
+.my-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.star-picker {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.star-picker button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--color-border-strong);
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+
+.star-picker button.is-on {
+  color: var(--color-primary);
+}
+
+.star-picker button:hover {
+  transform: scale(1.1);
+}
+
+.my-review-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.my-review-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}

@@ -28,6 +28,16 @@ function Settings() {
   // Favorite books state
   const [isEditingFavorites, setIsEditingFavorites] = useState(false);
   const [selectedBooks, setSelectedBooks] = useState(userProfile?.favoriteBooks || []);
+  const [privacySaving, setPrivacySaving] = useState(false);
+  const [privacyError, setPrivacyError] = useState('');
+
+  const handlePrivacyToggle = async () => {
+    setPrivacySaving(true);
+    setPrivacyError('');
+    const result = await updateUserProfile({ isPrivate: !userProfile?.isPrivate });
+    if (!result.success) setPrivacyError(result.error || 'Could not update your privacy setting');
+    setPrivacySaving(false);
+  };
 
   const handleUsernameChange = async (e) => {
     e.preventDefault();
@@ -251,7 +261,7 @@ function Settings() {
         </div>
         {avatarError && <div className="error-message">{avatarError}</div>}
         <p className="upload-note">
-          Max size: 5MB. Recommended: Square image, at least 200x200px.
+          Any photo works: it's cropped to a square and resized for you.
         </p>
       </div>
 
@@ -322,6 +332,33 @@ function Settings() {
             onCancel={() => setIsEditingFavorites(false)}
           />
         )}
+      </div>
+
+      <div className="settings-section">
+        <h3>Privacy</h3>
+        <div className="settings-toggle-row">
+          <div>
+            <p className="settings-toggle-label">Private profile</p>
+            <p className="section-note">
+              Friends won't see your shelves, reviews or activity, and your reviews show as
+              "A Pagebound reader". You can still read together in sessions.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!!userProfile?.isPrivate}
+            className={`settings-switch ${userProfile?.isPrivate ? 'is-on' : ''}`}
+            onClick={handlePrivacyToggle}
+            disabled={privacySaving}
+          >
+            <span className="sr-only">Private profile</span>
+          </button>
+        </div>
+        {privacyError && <div className="error-message">{privacyError}</div>}
+        <p className="settings-email">
+          Signed in as <strong>{userProfile?.email}</strong> · only you can see this
+        </p>
       </div>
 
       {Object.keys(themes).length > 1 && (

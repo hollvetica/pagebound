@@ -1,110 +1,40 @@
-// Profile service for managing user profile operations
-import { apiFetch, API_ENDPOINT } from './apiFetch';
+// Profile service: your own profile, stats and photo
+import { apiJson } from './apiFetch';
 
-/**
- * Get presigned URL for avatar upload
- * @param {string} email - User's email
- * @param {string} fileType - MIME type of the file (e.g., 'image/jpeg')
- * @returns {Promise<{uploadUrl: string, imageUrl: string, expiresIn: number}>}
- */
-export const getAvatarUploadUrl = async (email, fileType) => {
-  const response = await apiFetch(`${API_ENDPOINT}/users/${encodeURIComponent(email)}/avatar-upload-url`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ fileType })
+const userPath = (email, action) => `/users/${encodeURIComponent(email)}${action ? `/${action}` : ''}`;
+
+// Update your profile: { tagline?, favoriteBooks?, isPrivate? } -> { profile }
+export const updateProfile = (email, updates) =>
+  apiJson(userPath(email, 'profile'), { method: 'PUT', body: JSON.stringify(updates) });
+
+// { totalBooks, booksRead, currentlyReading, chaptersCompleted, friendsCount, joinedDate }
+export const getUserStats = (email) => apiJson(userPath(email, 'stats'));
+
+// Upload a photo prepared by resizeImageToDataUrl -> { avatarUrl }
+export const uploadAvatar = (email, imageData) =>
+  apiJson(userPath(email, 'avatar'), { method: 'POST', body: JSON.stringify({ imageData }) });
+
+// Centre-crop an image file to a square and shrink it to `size` px (JPEG)
+export const resizeImageToDataUrl = (file, size = 400) =>
+  new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      canvas.getContext('2d').drawImage(
+        img,
+        (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side,
+        0, 0, size, size
+      );
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("That file couldn't be read as an image"));
+    };
+    img.src = url;
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to get upload URL');
-  }
-
-  return await response.json();
-};
-
-/**
- * Upload image to S3 using presigned URL
- * @param {string} presignedUrl - Presigned S3 URL
- * @param {File} file - Image file to upload
- * @returns {Promise<void>}
- */
-export const uploadAvatarToS3 = async (presignedUrl, file) => {
-  const response = await fetch(presignedUrl, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': file.type
-    },
-    body: file
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to upload image to S3');
-  }
-};
-
-/**
- * Confirm avatar upload and update database
- * @param {string} email - User's email
- * @param {string} imageUrl - URL of the uploaded image
- * @returns {Promise<{success: boolean, avatarUrl: string}>}
- */
-export const confirmAvatarUpload = async (email, imageUrl) => {
-  const response = await apiFetch(`${API_ENDPOINT}/users/${encodeURIComponent(email)}/avatar-confirm`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ imageUrl })
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to confirm avatar upload');
-  }
-
-  return await response.json();
-};
-
-/**
- * Update user profile (tagline, favoriteBooks, bio)
- * @param {string} email - User's email
- * @param {Object} updates - Profile updates
- * @param {string} [updates.tagline] - Personal tagline (max 255 chars)
- * @param {Array} [updates.favoriteBooks] - Array of favorite book objects (max 10)
- * @param {string} [updates.bio] - User bio
- * @returns {Promise<{success: boolean}>}
- */
-export const updateProfile = async (email, updates) => {
-  const response = await apiFetch(`${API_ENDPOINT}/users/${encodeURIComponent(email)}/profile`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(updates)
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to update profile');
-  }
-
-  return await response.json();
-};
-
-/**
- * Get user reading stats
- * @param {string} email - User's email
- * @returns {Promise<{chaptersCompleted: number, booksRead: number, totalBooks: number, joinedDate: string}>}
- */
-export const getUserStats = async (email) => {
-  const response = await apiFetch(`${API_ENDPOINT}/users/${encodeURIComponent(email)}/stats`);
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to get user stats');
-  }
-
-  return await response.json();
-};

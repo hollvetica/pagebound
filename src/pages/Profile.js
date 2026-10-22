@@ -1,12 +1,32 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getUserStats } from '../utils/profileService';
+import { getUserReviews } from '../utils/socialService';
+import { useFriends } from '../context/FriendsContext';
+import { ReviewCard } from '../components/Reviews';
+import { isPreviewMode } from '../utils/previewMode';
 import './Profile.css';
 
 function Profile({ onNavigateToSettings, onNavigateToAdmin }) {
-  const { user, userProfile, logout } = useAuth();
+  const { userProfile, logout } = useAuth();
   const [stats, setStats] = useState(null);
   const [loadingStats, setLoadingStats] = useState(true);
+  const [reviews, setReviews] = useState(null);
+  const { friends } = useFriends();
+
+  // Your reviews
+  useEffect(() => {
+    if (!userProfile?.userId) return undefined;
+    let cancelled = false;
+    if (isPreviewMode()) {
+      setReviews(Object.values(JSON.parse(localStorage.getItem('pagebound-preview-reviews') || '{}')));
+      return undefined;
+    }
+    getUserReviews(userProfile.userId)
+      .then(d => { if (!cancelled) setReviews(d.reviews || []); })
+      .catch(() => { if (!cancelled) setReviews([]); });
+    return () => { cancelled = true; };
+  }, [userProfile?.userId]);
 
   useEffect(() => {
     const loadStats = async () => {
@@ -67,7 +87,7 @@ function Profile({ onNavigateToSettings, onNavigateToAdmin }) {
           <p className="profile-tagline">"{userProfile.tagline}"</p>
         )}
 
-        <p className="profile-email">{user?.signInDetails?.loginId || ''}</p>
+        {userProfile?.isPrivate && <p className="profile-private-pill">Private profile</p>}
       </div>
 
       {/* Stats Section */}
@@ -82,7 +102,7 @@ function Profile({ onNavigateToSettings, onNavigateToAdmin }) {
             <span className="stat-label">Books Read</span>
           </div>
           <div className="stat-item">
-            <span className="stat-value">{userProfile?.friendsCount || 0}</span>
+            <span className="stat-value">{stats.friendsCount ?? friends.length}</span>
             <span className="stat-label">Friends</span>
           </div>
         </div>
@@ -106,6 +126,20 @@ function Profile({ onNavigateToSettings, onNavigateToAdmin }) {
           </div>
         </div>
       )}
+
+      {/* Reviews */}
+      <div className="profile-reviews-section">
+        <h3>Your reviews{reviews?.length ? <span className="profile-section-count">{reviews.length}</span> : null}</h3>
+        {!reviews ? (
+          <p className="review-muted">Loading…</p>
+        ) : reviews.length === 0 ? (
+          <p className="profile-reviews-empty">Rate and review a book from its page in your Library. Your reviews show here and to your friends.</p>
+        ) : (
+          <div className="profile-reviews-list">
+            {reviews.map(r => <ReviewCard key={r.isbn} review={r} showBook />)}
+          </div>
+        )}
+      </div>
 
       <div className="profile-actions">
         <button className="profile-action-button" onClick={onNavigateToSettings}>

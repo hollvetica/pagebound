@@ -1,5 +1,5 @@
 // socialAPI Lambda Function
-// Home feed, reactions and book recommendations.
+// Home feed, reactions, book recommendations and reviews.
 //
 // Every request is authenticated by the API Gateway Cognito authorizer; the
 // caller is claims.sub.
@@ -12,12 +12,14 @@
 //   FRIENDS_TABLE          userId (HASH), friendUserId (RANGE)
 //   SHELVES_TABLE          userId (HASH), shelfId (RANGE) – shelf visibility
 //   USERS_TABLE            GSI userId-index
+//   REVIEWS_TABLE          isbn (HASH), userId (RANGE); GSI userId-index (userId, updatedAt)
+//   LIBRARY_TABLE          reviewing a book also sets its rating in your library
 //
 // Feed items are identified as "a|<actorId>|<sk>" (activity) or
 // "r|<toUserId>|<sk>" (recommendation).
 
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand, QueryCommand } = require("@aws-sdk/lib-dynamodb");
+const { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand, QueryCommand, UpdateCommand } = require("@aws-sdk/lib-dynamodb");
 const { randomUUID } = require('crypto');
 
 const client = new DynamoDBClient({});
@@ -29,6 +31,10 @@ const REACTIONS_TABLE = process.env.REACTIONS_TABLE || 'pagebound-reactions';
 const FRIENDS_TABLE = process.env.FRIENDS_TABLE || 'pagebound-friends';
 const SHELVES_TABLE = process.env.SHELVES_TABLE || 'pagebound-shelves';
 const USERS_TABLE = process.env.USERS_TABLE || 'pagebound-users';
+const REVIEWS_TABLE = process.env.REVIEWS_TABLE || 'pagebound-reviews';
+const LIBRARY_TABLE = process.env.LIBRARY_TABLE || 'pagebound-library';
+const MAX_REVIEW = 2000;
+const ANONYMOUS = { userId: null, username: null, displayName: 'A Pagebound reader', avatarUrl: null, isPrivate: true };
 
 const REACTIONS = ['❤️', '🔥', '😂', '😮', '📚'];
 const FEED_DAYS = 30;
@@ -154,6 +160,7 @@ async function getFeed(event, callerId) {
         book: item.book || null,
         shelf: item.shelf || null,
         session: item.session || null,
+        review: item.review || null,
         createdAt: item.createdAt
       }));
   }))).flat();
@@ -256,10 +263,135 @@ async function recommend(event, callerId) {
   return json(201, { sent: recipients.length });
 }
 
+// ---------------------------------------------------------------- reviews
+
+const reviewOut = (r, author) => ({
+  isbn: r.isbn,
+  book: r.book,
+  rating: r.rating,
+  text: r.text,
+  createdAt: r.createdAt,
+  updatedAt: r.updatedAt,
+  author
+});
+
+// GET /books/{isbn}/reviews – every reader's review; private profiles are anonymous
+async function bookReviews(event, callerId) {
+  const isbn = decodeURIComponent(event.pathParameters?.isbn || '');
+  const items = await query({
+    TableName: REVIEWS_TABLE,
+    KeyConditionExpression: 'isbn = :i',
+    ExpressionAttributeValues: { ':i': isbn }
+  });
+  const reviews = await Promise.all(items.map(async (r) => {
+    const author = await userCard(r.userId);
+    return reviewOut(r, r.userId === callerId ? { ...author, isMe: true }
+      : author.isPrivate ? ANONYMOUS : author);
+  }));
+  reviews.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+  const ratings = reviews.map(r => r.rating);
+
+  return json(200, {
+    reviews: reviews.filter(r => r.text),
+    mine: reviews.find(r => r.author.isMe) || null,
+    count: ratings.length,
+    average: ratings.length ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10 : null
+  });
+}
+
+// PUT /books/{isbn}/reviews/mine  { rating 1-5, text, book: {title, author, coverUrl} }
+async function saveReview(event, callerId) {
+  const isbn = decodeURIComponent(event.pathParameters?.isbn || '');
+  const { rating, text = '', book = {} } = parseBody(event);
+  const stars = Number(rating);
+  if (!Number.isInteger(stars) || stars < 1 || stars > 5) throw new HttpError(400, 'Give the book 1 to 5 stars');
+  const clean = String(text || '').trim();
+  if (clean.length > MAX_REVIEW) throw new HttpError(400, `Reviews can be up to ${MAX_REVIEW} characters`);
+  if (!isbn || !book.title) throw new HttpError(400, 'Which book?');
+
+  const existing = await dynamodb.send(new GetCommand({ TableName: REVIEWS_TABLE, Key: { isbn, userId: callerId } }));
+  const now = new Date().toISOString();
+  const bookCard = {
+    isbn,
+    title: String(book.title).slice(0, 300),
+    author: String(book.author || '').slice(0, 300),
+    coverUrl: book.coverUrl ? String(book.coverUrl).slice(0, 1000) : null
+  };
+  const item = {
+    isbn,
+    userId: callerId,
+    rating: stars,
+    text: clean,
+    book: bookCard,
+    createdAt: existing.Item?.createdAt || now,
+    updatedAt: now
+  };
+  await dynamodb.send(new PutCommand({ TableName: REVIEWS_TABLE, Item: item }));
+
+  // Keep the library rating in step (only if the book is on the reader's shelves)
+  try {
+    await dynamodb.send(new UpdateCommand({
+      TableName: LIBRARY_TABLE,
+      Key: { userId: callerId, isbn },
+      UpdateExpression: 'SET rating = :r',
+      ConditionExpression: 'attribute_exists(isbn)',
+      ExpressionAttributeValues: { ':r': stars }
+    }));
+  } catch (error) {
+    if (error.name !== 'ConditionalCheckFailedException') console.error('Could not sync rating:', error);
+  }
+
+  // A new written review goes to friends' feeds
+  if (!existing.Item && clean) {
+    await dynamodb.send(new PutCommand({
+      TableName: ACTIVITY_TABLE,
+      Item: {
+        actorId: callerId,
+        sk: `${now}#${randomUUID()}`,
+        type: 'book_reviewed',
+        createdAt: now,
+        book: bookCard,
+        review: { rating: stars, excerpt: clean.slice(0, 240) }
+      }
+    }));
+  }
+
+  return json(200, { review: reviewOut(item, { ...(await userCard(callerId)), isMe: true }) });
+}
+
+// DELETE /books/{isbn}/reviews/mine
+async function deleteReview(event, callerId) {
+  const isbn = decodeURIComponent(event.pathParameters?.isbn || '');
+  await dynamodb.send(new DeleteCommand({ TableName: REVIEWS_TABLE, Key: { isbn, userId: callerId } }));
+  return json(200, { ok: true });
+}
+
+// GET /reviews/by/{userId} – a reader's reviews (yourself, or a friend with a public profile)
+async function userReviews(event, callerId) {
+  const userId = event.pathParameters?.userId;
+  const author = await userCard(userId);
+  if (userId !== callerId) {
+    if (!(await areFriends(callerId, userId))) throw new HttpError(403, 'Only friends can see these reviews');
+    if (author.isPrivate) return json(200, { isPrivate: true, reviews: [] });
+  }
+  const items = await query({
+    TableName: REVIEWS_TABLE,
+    IndexName: 'userId-index',
+    KeyConditionExpression: 'userId = :u',
+    ExpressionAttributeValues: { ':u': userId },
+    ScanIndexForward: false
+  });
+  return json(200, { isPrivate: false, reviews: items.map(r => reviewOut(r, { ...author, isMe: userId === callerId })) });
+}
+
 const routes = [
   ['GET', /^\/feed$/, getFeed],
   ['PUT', /^\/feed\/items\/[^/]+\/reactions$/, setReaction],
-  ['POST', /^\/recommendations$/, recommend]
+  ['POST', /^\/recommendations$/, recommend],
+  ['GET', /^\/books\/[^/]+\/reviews$/, bookReviews],
+  ['PUT', /^\/books\/[^/]+\/reviews\/mine$/, saveReview],
+  ['DELETE', /^\/books\/[^/]+\/reviews\/mine$/, deleteReview],
+  ['GET', /^\/reviews\/by\/[^/]+$/, userReviews]
 ];
 
 exports.handler = async (event) => {

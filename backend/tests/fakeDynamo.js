@@ -16,7 +16,8 @@ const KEYS = {
   'pagebound-shelves': ['userId', 'shelfId'],
   'pagebound-activity': ['actorId', 'sk'],
   'pagebound-recommendations': ['toUserId', 'sk'],
-  'pagebound-reactions': ['itemId', 'userId']
+  'pagebound-reactions': ['itemId', 'userId'],
+  'pagebound-reviews': ['isbn', 'userId']
 };
 
 const tables = {};
@@ -75,6 +76,11 @@ async function send(command) {
   }
   if (command instanceof lib.UpdateCommand) {
     const k = keyOf(name, input.Key);
+    if (input.ConditionExpression?.startsWith('attribute_exists') && !t.has(k)) {
+      const e = new Error('Conditional check failed');
+      e.name = 'ConditionalCheckFailedException';
+      throw e;
+    }
     const item = t.get(k) || clone(input.Key);
     applySet(item, input.UpdateExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues);
     t.set(k, item);
@@ -107,4 +113,29 @@ lib.DynamoDBDocumentClient.prototype.send = send;
 // The Lambdas call DynamoDBDocumentClient.from(client) – make it return a stub
 lib.DynamoDBDocumentClient.from = () => ({ send });
 
-module.exports = { tables, table, reset: () => Object.keys(tables).forEach(k => delete tables[k]) };
+// Stand-in for @aws-sdk/client-s3 (not installed locally; the Lambda runtime has it)
+const s3Objects = new Map();
+class S3Command { constructor(input) { this.input = input; } }
+class PutObjectCommand extends S3Command {}
+class DeleteObjectCommand extends S3Command {}
+class S3Client {
+  async send(command) {
+    const { Bucket, Key } = command.input;
+    if (command instanceof PutObjectCommand) s3Objects.set(`${Bucket}/${Key}`, command.input);
+    if (command instanceof DeleteObjectCommand) s3Objects.delete(`${Bucket}/${Key}`);
+    return {};
+  }
+}
+const Module = require('module');
+const originalLoad = Module._load;
+Module._load = function (request, ...rest) {
+  if (request === '@aws-sdk/client-s3') return { S3Client, PutObjectCommand, DeleteObjectCommand };
+  return originalLoad.call(this, request, ...rest);
+};
+
+module.exports = {
+  tables,
+  table,
+  s3Objects,
+  reset: () => { Object.keys(tables).forEach(k => delete tables[k]); s3Objects.clear(); }
+};

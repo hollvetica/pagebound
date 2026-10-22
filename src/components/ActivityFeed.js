@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { SmilePlus } from 'lucide-react';
+import { Stars } from './Reviews';
 import './ActivityFeed.css';
 
 const timeAgo = (iso) => {
@@ -33,6 +34,8 @@ function describe(item) {
     }
     case 'recommendation':
       return <>{who} recommended {title} to you</>;
+    case 'book_reviewed':
+      return <>{who} reviewed {title}</>;
     default:
       return <>{who} shared an update</>;
   }
@@ -119,6 +122,12 @@ function ActivityFeed({ items, reactionSet, loading, onReact, onSuggestSession, 
                   <div className="activity-text">
                     <p>{describe(item)}</p>
                     {item.note && <blockquote className="activity-note">“{item.note}”</blockquote>}
+                    {item.review && (
+                      <div className="activity-review">
+                        <Stars rating={item.review.rating} />
+                        {item.review.excerpt && <blockquote className="activity-note">“{item.review.excerpt}”</blockquote>}
+                      </div>
+                    )}
 
                     {item.type === 'recommendation' && (
                       state === 'added' ? (

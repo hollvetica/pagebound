@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { getCurrentUser, signIn, signUp, signOut, confirmSignUp, resetPassword, confirmResetPassword } from 'aws-amplify/auth';
 import { fetchUserProfile, updateUsername, checkUsernameAvailable } from '../utils/userService';
-import { getAvatarUploadUrl, uploadAvatarToS3, confirmAvatarUpload, updateProfile } from '../utils/profileService';
+import { uploadAvatar, updateProfile, resizeImageToDataUrl } from '../utils/profileService';
 import { isPreviewMode } from '../utils/previewMode';
 
 const AuthContext = createContext();
@@ -188,32 +188,25 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: 'User not authenticated' };
       }
 
-      // Validate file size (5MB max)
-      if (file.size > 5 * 1024 * 1024) {
-        return { success: false, error: 'Image must be less than 5MB' };
-      }
-
-      // Validate file type
       if (!file.type.startsWith('image/')) {
-        return { success: false, error: 'File must be an image' };
+        return { success: false, error: 'Choose an image file' };
+      }
+      if (file.size > 20 * 1024 * 1024) {
+        return { success: false, error: 'That image is too large (20 MB max)' };
       }
 
-      // Get presigned URL
-      const { uploadUrl, imageUrl } = await getAvatarUploadUrl(
-        user.signInDetails.loginId,
-        file.type
-      );
+      // Square-crop and shrink in the browser; the API checks it again
+      const imageData = await resizeImageToDataUrl(file, 400);
 
-      // Upload to S3
-      await uploadAvatarToS3(uploadUrl, file);
+      if (isPreviewMode()) {
+        setUserProfile(prev => ({ ...prev, avatarUrl: imageData }));
+        return { success: true, imageUrl: imageData };
+      }
 
-      // Confirm and update DB
-      await confirmAvatarUpload(user.signInDetails.loginId, imageUrl);
+      const { avatarUrl } = await uploadAvatar(user.signInDetails.loginId, imageData);
+      setUserProfile(prev => ({ ...prev, avatarUrl }));
 
-      // Refresh profile
-      await checkUser();
-
-      return { success: true, imageUrl };
+      return { success: true, imageUrl: avatarUrl };
     } catch (err) {
       setError(err.message);
       return { success: false, error: err.message };
@@ -237,8 +230,13 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: 'Cannot have more than 10 favorite books' };
       }
 
-      await updateProfile(user.signInDetails.loginId, updates);
-      await checkUser();
+      if (isPreviewMode()) {
+        setUserProfile(prev => ({ ...prev, ...updates }));
+        return { success: true };
+      }
+
+      const { profile } = await updateProfile(user.signInDetails.loginId, updates);
+      setUserProfile(prev => ({ ...prev, ...profile }));
 
       return { success: true };
     } catch (err) {

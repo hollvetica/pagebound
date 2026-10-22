@@ -255,3 +255,14 @@
   background: transparent;
   border-color: transparent;
 }
+
+.activity-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.activity-review .activity-note {
+  margin-top: 0;
+}

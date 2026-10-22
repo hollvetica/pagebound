@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BookOpen, Users } from 'lucide-react';
 import { getBookStats } from '../utils/libraryService';
 import { isPreviewMode } from '../utils/previewMode';
+import { BookReviews } from './Reviews';
 import './BookPreview.css';
 
 const SYNOPSIS_PREVIEW_CHARS = 420;
@@ -116,14 +117,7 @@ function BookPreview({ book, inLibrary, onClose, onAdd }) {
 
         <section className="book-preview-section">
           <h3>Reviews</h3>
-          {stats?.ratingCount ? (
-            <p className="book-preview-rating">
-              <span className="book-preview-stars" aria-hidden="true">★</span>
-              <strong>{stats.ratingAverage}</strong> from {count(stats.ratingCount, 'Pagebound reader', 'Pagebound readers')}
-            </p>
-          ) : (
-            <p className="book-preview-muted">No Pagebound ratings yet.</p>
-          )}
+          <BookReviews isbn={book.isbn} />
           {book.averageRating ? (
             <p className="book-preview-muted">
               {book.averageRating} on Google Books ({count(book.ratingsCount || 0, 'rating', 'ratings')})
