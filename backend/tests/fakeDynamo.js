@@ -12,7 +12,8 @@ const KEYS = {
   'pagebound-messages': ['messageId'],
   'pagebound-friends': ['userId', 'friendUserId'],
   'pagebound-users': ['email'],
-  'pagebound-library': ['userId', 'isbn']
+  'pagebound-library': ['userId', 'isbn'],
+  'pagebound-shelves': ['userId', 'shelfId']
 };
 
 const tables = {};

@@ -1,5 +1,5 @@
-// Offline tests for the sessions, library and friends Lambdas.
-// Run from the repo root:  node backend/tests/phase1.test.js
+// Offline tests for the Pagebound API Lambdas.
+// Run from the repo root:  node backend/tests/api.test.js
 const assert = require('assert');
 
 // Safety net: if anything bypasses the fake, it fails fast instead of reaching AWS
@@ -16,6 +16,7 @@ process.env.MESSAGES_TABLE = 'pagebound-messages';
 process.env.USERS_TABLE = 'pagebound-users';
 process.env.FRIENDS_TABLE = 'pagebound-friends';
 process.env.LIBRARY_TABLE = 'pagebound-library';
+process.env.SHELVES_TABLE = 'pagebound-shelves';
 
 const db = require('./fakeDynamo');
 const sessions = require('../lambda/sessionsAPI');
@@ -274,6 +275,95 @@ test('users: own profile only; admin actions restricted', async () => {
   assert.strictEqual(selfAdmin.status, 403, 'only the super admin can grant admin');
   const list = await call(userApi, 'GET', '/users/admin', { caller: 'ann', pathParameters: proxy('admin') });
   assert.strictEqual(list.status, 403);
+});
+
+// ---------------------------------------------------------------- shelves
+const shelvesPath = (who) => ({ path: `/library/${who}/shelves`, pathParameters: { userId: who } });
+
+test('shelves: status shelves by default, create / rename / visibility / delete', async () => {
+  const { path, pathParameters } = shelvesPath('ann');
+  let list = await call(library, 'GET', path, { caller: 'ann', pathParameters });
+  assert.deepStrictEqual(list.body.shelves.map(s => s.name), ['Currently Reading', 'Want to Read', 'Finished']);
+  assert.ok(list.body.shelves.every(s => s.visibility === 'public' && s.kind === 'status'));
+
+  const created = await call(library, 'POST', path, { caller: 'ann', pathParameters, body: { name: "  Emma's   book club ", visibility: 'private' } });
+  assert.strictEqual(created.status, 201);
+  assert.strictEqual(created.body.shelf.name, "Emma's book club");
+  assert.ok(!('userId' in created.body.shelf));
+  const id = created.body.shelf.shelfId;
+
+  const dupe = await call(library, 'POST', path, { caller: 'ann', pathParameters, body: { name: "emma's BOOK club" } });
+  assert.strictEqual(dupe.status, 409);
+  const statusName = await call(library, 'POST', path, { caller: 'ann', pathParameters, body: { name: 'finished' } });
+  assert.strictEqual(statusName.status, 409, 'cannot reuse a status shelf name');
+  const empty = await call(library, 'POST', path, { caller: 'ann', pathParameters, body: { name: '   ' } });
+  assert.strictEqual(empty.status, 400);
+
+  const one = (sid) => ({ caller: 'ann', pathParameters: { userId: 'ann', shelfId: sid } });
+  const renamed = await call(library, 'PUT', `${path}/${id}`, { ...one(id), body: { name: 'Spooky October Reads', visibility: 'public' } });
+  assert.strictEqual(renamed.status, 200);
+  assert.strictEqual(renamed.body.shelf.visibility, 'public');
+
+  const statusPrivate = await call(library, 'PUT', `${path}/want-to-read`, { ...one('want-to-read'), body: { visibility: 'private' } });
+  assert.strictEqual(statusPrivate.status, 200);
+  const statusRename = await call(library, 'PUT', `${path}/want-to-read`, { ...one('want-to-read'), body: { name: 'Someday' } });
+  assert.strictEqual(statusRename.status, 400);
+  const statusDelete = await call(library, 'DELETE', `${path}/finished`, one('finished'));
+  assert.strictEqual(statusDelete.status, 400);
+
+  list = await call(library, 'GET', path, { caller: 'ann', pathParameters });
+  assert.deepStrictEqual(list.body.shelves.map(s => `${s.name}:${s.visibility}`),
+    ['Currently Reading:public', 'Want to Read:private', 'Finished:public', 'Spooky October Reads:public']);
+
+  const bo = await call(library, 'GET', '/library/ann/shelves', { caller: 'bo', pathParameters: { userId: 'ann' } });
+  assert.strictEqual(bo.status, 403);
+});
+
+test('books join custom shelves (own shelves only) and leave when a shelf is deleted', async () => {
+  const { path, pathParameters } = shelvesPath('ann');
+  const shelf = (await call(library, 'POST', path, { caller: 'ann', pathParameters, body: { name: 'Book club' } })).body.shelf;
+  const boShelf = (await call(library, 'POST', '/library/bo/shelves', { caller: 'bo', pathParameters: { userId: 'bo' }, body: { name: 'Bo only' } })).body.shelf;
+
+  const add = await call(library, 'POST', '/library/ann/books', {
+    caller: 'ann', pathParameters: { userId: 'ann' },
+    body: { isbn: '111', title: 'Piranesi', shelves: [shelf.shelfId, boShelf.shelfId, 'made-up'] }
+  });
+  assert.deepStrictEqual(add.body.book.shelves, [shelf.shelfId], "other readers' and unknown shelves are dropped");
+
+  const bookKey = { caller: 'ann', pathParameters: { userId: 'ann', isbn: '111' } };
+  const cleared = await call(library, 'PUT', '/library/ann/books/111', { ...bookKey, body: { shelves: [] } });
+  assert.deepStrictEqual(cleared.body.book.shelves, []);
+  await call(library, 'PUT', '/library/ann/books/111', { ...bookKey, body: { shelves: [shelf.shelfId] } });
+
+  const del = await call(library, 'DELETE', `${path}/${shelf.shelfId}`, { caller: 'ann', pathParameters: { userId: 'ann', shelfId: shelf.shelfId } });
+  assert.strictEqual(del.status, 200);
+  const books = await call(library, 'GET', '/library/ann/books', { caller: 'ann', pathParameters: { userId: 'ann' } });
+  assert.strictEqual(books.body.count, 1, 'the book stays in the library');
+  assert.deepStrictEqual(books.body.books[0].shelves, []);
+});
+
+// ---------------------------------------------------------------- book stats
+test('book stats: totals across readers, no identities', async () => {
+  for (const [who, rating] of [['ann', 4], ['bo', 5], ['cy', 0]]) {
+    await call(library, 'POST', `/library/${who}/books`, {
+      caller: who, pathParameters: { userId: who }, body: { isbn: '111', title: 'Piranesi', rating }
+    });
+  }
+  await annStartsWithBo();
+
+  const stats = await call(library, 'GET', '/books/111/stats', { caller: 'cy', pathParameters: { isbn: '111' } });
+  assert.strictEqual(stats.status, 200);
+  assert.deepStrictEqual(stats.body, {
+    isbn: '111', inLibraries: 3, inMyLibrary: true, activeSessions: 1, ratingCount: 2, ratingAverage: 4.5
+  });
+
+  const none = await call(library, 'GET', '/books/999/stats', { caller: 'cy', pathParameters: { isbn: '999' } });
+  assert.deepStrictEqual(none.body, {
+    isbn: '999', inLibraries: 0, inMyLibrary: false, activeSessions: 0, ratingCount: 0, ratingAverage: null
+  });
+
+  const anon = await call(library, 'GET', '/books/111/stats', { pathParameters: { isbn: '111' } });
+  assert.strictEqual(anon.status, 401);
 });
 
 (async () => {

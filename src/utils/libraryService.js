@@ -1,5 +1,5 @@
 // Library service for managing user's book library
-import { apiFetch, API_ENDPOINT } from './apiFetch';
+import { apiFetch, apiJson, API_ENDPOINT } from './apiFetch';
 
 /**
  * Get user's library books
@@ -117,3 +117,32 @@ export const getLibraryStats = async (userId) => {
 
   return await response.json();
 };
+
+// ---------------------------------------------------------------- shelves
+// Status shelves (Currently Reading / Want to Read / Finished) plus the
+// reader's custom shelves: [{ shelfId, name, kind, visibility }]
+export const getShelves = (userId) =>
+  apiJson(`/library/${encodeURIComponent(userId)}/shelves`);
+
+export const createShelf = (userId, { name, visibility }) =>
+  apiJson(`/library/${encodeURIComponent(userId)}/shelves`, {
+    method: 'POST',
+    body: JSON.stringify({ name, visibility })
+  });
+
+// { name?, visibility? } – status shelves only accept visibility
+export const updateShelf = (userId, shelfId, updates) =>
+  apiJson(`/library/${encodeURIComponent(userId)}/shelves/${encodeURIComponent(shelfId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(updates)
+  });
+
+export const deleteShelf = (userId, shelfId) =>
+  apiJson(`/library/${encodeURIComponent(userId)}/shelves/${encodeURIComponent(shelfId)}`, {
+    method: 'DELETE'
+  });
+
+// ---------------------------------------------------------------- book stats
+// { inLibraries, inMyLibrary, activeSessions, ratingCount, ratingAverage }
+export const getBookStats = (isbn) =>
+  apiJson(`/books/${encodeURIComponent(isbn)}/stats`);

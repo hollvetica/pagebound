@@ -1,8 +1,16 @@
 import React, { useState } from 'react';
+import BookPreview from './BookPreview';
 import './BookSearch.css';
 
-function BookSearch({ onBookSelect }) {
+// Optional: a Google Books API key gives the app its own daily quota instead
+// of the shared anonymous one. Set REACT_APP_GOOGLE_BOOKS_KEY in Amplify.
+const GOOGLE_BOOKS_KEY = process.env.REACT_APP_GOOGLE_BOOKS_KEY;
+
+// Search Google Books (Open Library as fallback). Tapping a result opens a
+// preview; adding a book (from the preview or the + button) closes the search.
+function BookSearch({ onAddBook, libraryIsbns = new Set() }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [previewBook, setPreviewBook] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState(null);
@@ -16,7 +24,7 @@ function BookSearch({ onBookSelect }) {
     try {
       // Try Google Books API first
       const googleResponse = await fetch(
-        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(searchQuery)}&maxResults=10`
+        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(searchQuery)}&maxResults=10${GOOGLE_BOOKS_KEY ? `&key=${GOOGLE_BOOKS_KEY}` : ''}`
       );
 
       if (googleResponse.ok) {
@@ -30,7 +38,10 @@ function BookSearch({ onBookSelect }) {
             author: item.volumeInfo.authors?.join(', ') || 'Unknown Author',
             coverUrl: item.volumeInfo.imageLinks?.thumbnail || null,
             publishYear: item.volumeInfo.publishedDate?.substring(0, 4) || 'Unknown',
-            description: item.volumeInfo.description || ''
+            description: item.volumeInfo.description || '',
+            pageCount: item.volumeInfo.pageCount || null,
+            averageRating: item.volumeInfo.averageRating || null,
+            ratingsCount: item.volumeInfo.ratingsCount || 0
           }));
 
           setSearchResults(books);
@@ -67,7 +78,9 @@ function BookSearch({ onBookSelect }) {
           ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
           : null,
         publishYear: doc.first_publish_year || 'Unknown',
-        description: doc.first_sentence?.join(' ') || ''
+        description: '',
+        pageCount: doc.number_of_pages_median || null,
+        workKey: doc.key || null // e.g. /works/OL27448W - synopsis and ratings load in the preview
       }));
 
       setSearchResults(books);
@@ -79,12 +92,17 @@ function BookSearch({ onBookSelect }) {
     }
   };
 
-  // Picking a result hands the book up and closes the search
-  const handleSelect = (book) => {
-    onBookSelect(book);
+  const closeSearch = () => {
     setSearchResults([]);
     setSearchQuery('');
     setError(null);
+  };
+
+  // Adding a book puts it on the shelf and closes the search
+  const handleAdd = async (book) => {
+    await onAddBook(book);
+    setPreviewBook(null);
+    closeSearch();
   };
 
   const handleKeyPress = (e) => {
@@ -120,7 +138,14 @@ function BookSearch({ onBookSelect }) {
         <div className="search-results">
           <h4>Search Results ({searchResults.length})</h4>
           {searchResults.map((book) => (
-            <div key={book.isbn} className="book-result" onClick={() => handleSelect(book)}>
+            <div
+              key={book.isbn}
+              className="book-result"
+              role="button"
+              tabIndex={0}
+              onClick={() => setPreviewBook(book)}
+              onKeyDown={(e) => { if (e.key === 'Enter') setPreviewBook(book); }}
+            >
               <div className="book-cover-placeholder">
                 {book.coverUrl ? (
                   <img src={book.coverUrl} alt={book.title} />
@@ -133,10 +158,29 @@ function BookSearch({ onBookSelect }) {
                 <p className="book-author">{book.author}</p>
                 <p className="book-year">{book.publishYear}</p>
               </div>
-              <button className="add-book-btn">+</button>
+              {libraryIsbns.has(book.isbn) ? (
+                <span className="add-book-btn is-added" title="In your library" aria-label="In your library">✓</span>
+              ) : (
+                <button
+                  className="add-book-btn"
+                  aria-label={`Add ${book.title} to your library`}
+                  onClick={(e) => { e.stopPropagation(); handleAdd(book); }}
+                >
+                  +
+                </button>
+              )}
             </div>
           ))}
         </div>
+      )}
+
+      {previewBook && (
+        <BookPreview
+          book={previewBook}
+          inLibrary={libraryIsbns.has(previewBook.isbn)}
+          onClose={() => setPreviewBook(null)}
+          onAdd={handleAdd}
+        />
       )}
     </div>
   );

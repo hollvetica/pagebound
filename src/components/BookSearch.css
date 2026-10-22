@@ -169,3 +169,21 @@
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
+
+.add-book-btn.is-added {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  cursor: default;
+}
+
+.add-book-btn.is-added:hover {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.book-result:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}

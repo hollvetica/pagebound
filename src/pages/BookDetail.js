@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useFriends } from '../context/FriendsContext';
 import { useSession } from '../context/SessionContext';
+import { STATUS_SHELF_NAMES, statusOf } from '../utils/shelves';
 import './BookDetail.css';
 
-function BookDetail({ book, onClose, onStartSession, onUpdateBook }) {
-  const [selectedShelf, setSelectedShelf] = useState(book.shelf || 'Want to Read');
+function BookDetail({ book, customShelves = [], onClose, onStartSession, onUpdateBook, onOpenSession }) {
+  const [selectedShelf, setSelectedShelf] = useState(statusOf(book));
+  const [onShelves, setOnShelves] = useState(book.shelves || []);
   const [totalChapters, setTotalChapters] = useState(book.totalChapters || '');
   const [totalPages, setTotalPages] = useState(book.totalPages || '');
   const [currentChapter, setCurrentChapter] = useState(book.currentChapter || 0);
@@ -18,12 +20,19 @@ function BookDetail({ book, onClose, onStartSession, onUpdateBook }) {
   const { getSessionForBook } = useSession();
   const existingSession = getSessionForBook(book.isbn);
 
-  const shelves = ['Want to Read', 'Currently Reading', 'Finished'];
+  const shelves = STATUS_SHELF_NAMES;
+
+  const toggleCustomShelf = (shelfId) => {
+    setOnShelves(onShelves.includes(shelfId)
+      ? onShelves.filter(id => id !== shelfId)
+      : [...onShelves, shelfId]);
+  };
 
   const handleSave = () => {
     const updatedBook = {
       ...book,
       shelf: selectedShelf,
+      shelves: onShelves,
       totalChapters: totalChapters ? parseInt(totalChapters) : null,
       totalPages: totalPages ? parseInt(totalPages) : null,
       currentChapter: selectedShelf === 'Currently Reading' ? currentChapter : 0
@@ -59,6 +68,7 @@ function BookDetail({ book, onClose, onStartSession, onUpdateBook }) {
     const updatedBook = {
       ...book,
       shelf: selectedShelf,
+      shelves: onShelves,
       totalChapters: parseInt(totalChapters) || null,
       totalPages: parseInt(totalPages) || null,
       currentChapter: selectedShelf === 'Currently Reading' ? currentChapter : 0
@@ -123,7 +133,7 @@ function BookDetail({ book, onClose, onStartSession, onUpdateBook }) {
         )}
 
         <div className="book-shelf-selector">
-          <h3>Add to Shelf</h3>
+          <h3>Reading status</h3>
           <div className="shelf-buttons">
             {shelves.map((shelf) => (
               <button
@@ -135,6 +145,25 @@ function BookDetail({ book, onClose, onStartSession, onUpdateBook }) {
               </button>
             ))}
           </div>
+
+          {customShelves.length > 0 && (
+            <div className="book-custom-shelves">
+              <span className="book-custom-shelves-label">Also on</span>
+              <div className="friend-chips">
+                {customShelves.map(shelf => (
+                  <button
+                    key={shelf.shelfId}
+                    type="button"
+                    className={`friend-chip ${onShelves.includes(shelf.shelfId) ? 'selected' : ''}`}
+                    onClick={() => toggleCustomShelf(shelf.shelfId)}
+                    aria-pressed={onShelves.includes(shelf.shelfId)}
+                  >
+                    {shelf.name} {onShelves.includes(shelf.shelfId) && '✓'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {(selectedShelf === 'Currently Reading' || selectedShelf === 'Finished') && (
@@ -293,9 +322,12 @@ function BookDetail({ book, onClose, onStartSession, onUpdateBook }) {
                 💾 Save Changes
               </button>
               {existingSession ? (
-                <p className="tracking-note">
-                  You're already in a reading session for this book. Find it on the Sessions tab.
-                </p>
+                <button
+                  className="secondary-button"
+                  onClick={onOpenSession}
+                >
+                  👥 Open session ({existingSession.participants.length} reader{existingSession.participants.length !== 1 ? 's' : ''})
+                </button>
               ) : (
                 <button
                   className="secondary-button"

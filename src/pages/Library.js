@@ -1,118 +1,128 @@
 import { useState, useEffect } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Pencil, Plus } from 'lucide-react';
 import BookSearch from '../components/BookSearch';
+import BookCard from '../components/BookCard';
+import ShelfEditor from '../components/ShelfEditor';
 import BookDetail from './BookDetail';
-import BookRating from '../components/BookRating';
 import { useSession } from '../context/SessionContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { getLibraryBooks, addBookToLibrary, updateLibraryBook } from '../utils/libraryService';
+import {
+  getLibraryBooks, addBookToLibrary, updateLibraryBook,
+  getShelves, createShelf, updateShelf, deleteShelf
+} from '../utils/libraryService';
+import { STATUS_SHELVES, booksOnShelf } from '../utils/shelves';
+import { isPreviewMode } from '../utils/previewMode';
 import './Library.css';
 
-function Library() {
-  const { createSession } = useSession();
+const LOCAL_BOOKS_KEY = 'pagebound-library';
+const PREVIEW_SHELVES_KEY = 'pagebound-shelves';
+
+function Library({ onNavigate }) {
+  const { createSession, getSessionForBook } = useSession();
   const { currentTheme } = useTheme();
   const { userProfile } = useAuth();
+  const userId = userProfile?.userId;
+  const preview = isPreviewMode();
 
-  // Track shelf visibility (public/private)
-  const [shelfVisibility, setShelfVisibility] = useState({
-    'Currently Reading': true,
-    'Want to Read': true,
-    'Read': true
-  });
-
-  const toggleShelfVisibility = (shelfName) => {
-    setShelfVisibility(prev => ({
-      ...prev,
-      [shelfName]: !prev[shelfName]
-    }));
-  };
-  
   const [myBooks, setMyBooks] = useState([]);
+  const [shelves, setShelves] = useState(STATUS_SHELVES);
   const [selectedBook, setSelectedBook] = useState(null);
-  const [, setIsLoaded] = useState(false);
+  const [editingShelf, setEditingShelf] = useState(null); // shelf object, 'new', or null
+  const [shelfError, setShelfError] = useState(null);
 
-  // Load books from backend on mount
+  // ---- Load books --------------------------------------------------------
   useEffect(() => {
     const loadLibrary = async () => {
-      if (userProfile?.userId) {
-        try {
-          // Try to load from backend first
-          const backendBooks = await getLibraryBooks(userProfile.userId);
+      if (!userId) return;
+      try {
+        const backendBooks = await getLibraryBooks(userId);
 
-          if (backendBooks.books && backendBooks.books.length > 0) {
-            setMyBooks(backendBooks.books);
-            // Sync to localStorage for offline cache
-            localStorage.setItem('pagebound-library', JSON.stringify(backendBooks.books));
-          } else {
-            // Fallback to localStorage if backend is empty (first-time migration)
-            const localBooks = localStorage.getItem('pagebound-library');
-            if (localBooks) {
-              const parsed = JSON.parse(localBooks);
-              setMyBooks(parsed);
-
-              // Sync to backend
-              await Promise.all(
-                parsed.map((book) => addBookToLibrary(userProfile.userId, book))
-              );
-            }
-          }
-        } catch (error) {
-          console.error('Error loading library:', error);
-          // Fallback to localStorage on error
-          const localBooks = localStorage.getItem('pagebound-library');
+        if (backendBooks.books && backendBooks.books.length > 0) {
+          setMyBooks(backendBooks.books);
+          localStorage.setItem(LOCAL_BOOKS_KEY, JSON.stringify(backendBooks.books));
+        } else {
+          // First-time migration: upload books saved in this browser
+          const localBooks = localStorage.getItem(LOCAL_BOOKS_KEY);
           if (localBooks) {
-            setMyBooks(JSON.parse(localBooks));
+            const parsed = JSON.parse(localBooks);
+            setMyBooks(parsed);
+            await Promise.all(parsed.map((book) => addBookToLibrary(userId, book).catch(() => {})));
           }
-        } finally {
-          setIsLoaded(true);
         }
-      } else {
-        setIsLoaded(true);
+      } catch (error) {
+        console.error('Error loading library:', error);
+        const localBooks = localStorage.getItem(LOCAL_BOOKS_KEY);
+        if (localBooks) setMyBooks(JSON.parse(localBooks));
       }
     };
     loadLibrary();
-  }, [userProfile]);
+  }, [userId]);
 
-  const handleAddBook = async (book) => {
-    // Check if book is already in library
-    if (myBooks.find(b => b.isbn === book.isbn)) {
-      alert('This book is already in your library!');
+  // ---- Load shelves ------------------------------------------------------
+  useEffect(() => {
+    if (preview) {
+      const saved = localStorage.getItem(PREVIEW_SHELVES_KEY);
+      setShelves(saved ? JSON.parse(saved) : STATUS_SHELVES);
       return;
     }
+    if (!userId) return;
+    getShelves(userId)
+      .then(data => setShelves(data.shelves?.length ? data.shelves : STATUS_SHELVES))
+      .catch(error => console.error('Error loading shelves:', error));
+  }, [preview, userId]);
+
+  const saveShelves = (next) => {
+    setShelves(next);
+    if (preview) localStorage.setItem(PREVIEW_SHELVES_KEY, JSON.stringify(next));
+  };
+
+  // ---- Books -------------------------------------------------------------
+  const persistBooks = (books) => {
+    setMyBooks(books);
+    localStorage.setItem(LOCAL_BOOKS_KEY, JSON.stringify(books));
+  };
+
+  // Called from search; resolves once the book is on the shelf
+  const handleAddBook = async (book) => {
+    if (myBooks.find(b => b.isbn === book.isbn)) return;
 
     const newBook = {
       ...book,
       shelf: 'Want to Read',
+      shelves: [],
       addedAt: new Date().toISOString(),
       currentChapter: 0,
       totalChapters: 0,
+      totalPages: book.pageCount || 0,
       progress: 0,
-      rating: 0,
-      friendsReading: 0,
-      hasMessage: false
+      rating: 0
     };
 
-    // Add book to local state
-    setMyBooks([...myBooks, newBook]);
-
-    // Sync to backend and localStorage
-    if (userProfile?.userId) {
+    persistBooks([...myBooks, newBook]);
+    if (userId && !preview) {
       try {
-        await addBookToLibrary(userProfile.userId, newBook);
+        await addBookToLibrary(userId, newBook);
       } catch (error) {
         console.error('Error adding book to backend:', error);
       }
     }
-    localStorage.setItem('pagebound-library', JSON.stringify([...myBooks, newBook]));
   };
 
-  const handleBookClick = (book) => {
-    setSelectedBook(book);
+  const handleUpdateBook = async (updatedBook) => {
+    persistBooks(myBooks.map((book) => (book.isbn === updatedBook.isbn ? updatedBook : book)));
+    if (userId && !preview) {
+      try {
+        await updateLibraryBook(userId, updatedBook.isbn, updatedBook);
+      } catch (error) {
+        console.error('Error updating book in backend:', error);
+      }
+    }
   };
 
-  const handleCloseDetail = () => {
-    setSelectedBook(null);
+  const handleRatingChange = async (isbn, newRating) => {
+    const book = myBooks.find((b) => b.isbn === isbn);
+    if (book) await handleUpdateBook({ ...book, rating: newRating });
   };
 
   // BookDetail builds the session (tracking mode, totals, invited friends).
@@ -121,142 +131,144 @@ function Library() {
     await createSession(sessionData);
   };
 
-  const handleUpdateBook = async (updatedBook) => {
-    const newBooks = myBooks.map((book) =>
-      book.isbn === updatedBook.isbn ? updatedBook : book
-    );
-
-    setMyBooks(newBooks);
-
-    // Sync to backend and localStorage
-    if (userProfile?.userId) {
-      try {
-        await updateLibraryBook(userProfile.userId, updatedBook.isbn, updatedBook);
-      } catch (error) {
-        console.error('Error updating book in backend:', error);
-      }
-    }
-    localStorage.setItem('pagebound-library', JSON.stringify(newBooks));
-  };
-
-  const handleRatingChange = async (isbn, newRating) => {
-    const book = myBooks.find((b) => b.isbn === isbn);
-    if (book) {
-      await handleUpdateBook({ ...book, rating: newRating });
+  // ---- Shelves -----------------------------------------------------------
+  const handleToggleVisibility = async (shelf) => {
+    const visibility = shelf.visibility === 'private' ? 'public' : 'private';
+    const previous = shelves;
+    saveShelves(shelves.map(s => (s.shelfId === shelf.shelfId ? { ...s, visibility } : s)));
+    if (preview) return;
+    try {
+      setShelfError(null);
+      await updateShelf(userId, shelf.shelfId, { visibility });
+    } catch (error) {
+      setShelves(previous);
+      setShelfError(`Couldn't update “${shelf.name}”. Please try again.`);
     }
   };
 
-  const groupedBooks = myBooks.reduce((acc, book) => {
-    if (!acc[book.shelf]) {
-      acc[book.shelf] = [];
+  const handleSaveShelf = async ({ name, visibility }) => {
+    if (editingShelf === 'new') {
+      const shelf = preview
+        ? { shelfId: `shelf-${Date.now()}`, kind: 'custom', name, visibility }
+        : (await createShelf(userId, { name, visibility })).shelf;
+      saveShelves([...shelves, shelf]);
+    } else {
+      const shelf = preview
+        ? { ...editingShelf, name, visibility }
+        : (await updateShelf(userId, editingShelf.shelfId, { name, visibility })).shelf;
+      saveShelves(shelves.map(s => (s.shelfId === shelf.shelfId ? shelf : s)));
     }
-    acc[book.shelf].push(book);
-    return acc;
-  }, {});
+  };
+
+  const handleDeleteShelf = async () => {
+    const shelfId = editingShelf.shelfId;
+    if (!preview) await deleteShelf(userId, shelfId);
+    saveShelves(shelves.filter(s => s.shelfId !== shelfId));
+    persistBooks(myBooks.map(b => ({ ...b, shelves: (b.shelves || []).filter(id => id !== shelfId) })));
+  };
+
+  const customShelves = shelves.filter(s => s.kind === 'custom');
+  // Status shelves show when they have books; custom shelves always show
+  const visibleShelves = shelves.filter(s => s.kind === 'custom' || booksOnShelf(myBooks, s).length > 0);
+  const libraryIsbns = new Set(myBooks.map(b => b.isbn));
 
   return (
     <div className="page library-page">
       <div className="library-header">
         <h2>My Library</h2>
-        <p>{myBooks.length} books</p>
+        <p>{myBooks.length} book{myBooks.length !== 1 ? 's' : ''}</p>
       </div>
 
-      <BookSearch onBookSelect={handleAddBook} />
+      <BookSearch onAddBook={handleAddBook} libraryIsbns={libraryIsbns} />
+
+      <div className="library-toolbar">
+        <span className="overline">Shelves</span>
+        <button className="btn-secondary btn-sm" onClick={() => setEditingShelf('new')}>
+          <Plus size={14} /> New shelf
+        </button>
+      </div>
+
+      {shelfError && <div className="error-message library-shelf-error">{shelfError}</div>}
 
       <div className="library-shelves">
-        {Object.keys(groupedBooks).map((shelfName) => (
-          <div key={shelfName} className="shelf-section">
-            <div className="shelf-header">
-              <h3>{shelfName}</h3>
-              <button
-                className="shelf-visibility-toggle"
-                onClick={() => toggleShelfVisibility(shelfName)}
-                title={shelfVisibility[shelfName] ? 'Make Private' : 'Make Public'}
-              >
-                {shelfVisibility[shelfName] ? (
-                  <>
-                    <Eye size={16} /> Public
-                  </>
-                ) : (
-                  <>
-                    <EyeOff size={16} /> Private
-                  </>
-                )}
-              </button>
-            </div>
-            <div className="books-grid">
-              {groupedBooks[shelfName].map((book) => (
-                <div
-                  key={book.isbn}
-                  className="book-card"
-                  onClick={() => handleBookClick(book)}
-                >
-                  <div className="book-card-cover">
-                    {book.coverUrl ? (
-                      <img src={book.coverUrl} alt={book.title} />
-                    ) : (
-                      '📚'
-                    )}
-                    {/* Indicators overlay */}
-                    <div className="book-indicators">
-                      {book.friendsReading > 0 && (
-                        <span className="friend-indicator" title={`${book.friendsReading} friends reading`}>
-                          👥 {book.friendsReading}
-                        </span>
-                      )}
-                      {book.hasMessage && (
-                        <span className="message-indicator" title="New message">
-                          💬
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {/* Progress bar for Currently Reading */}
-                  {book.shelf === 'Currently Reading' && book.progress !== undefined && (
-                    <div className="book-progress-bar">
-                      <div
-                        className="book-progress-fill"
-                        style={{ width: `${book.progress}%` }}
-                      />
-                    </div>
+        {visibleShelves.map((shelf) => {
+          const books = booksOnShelf(myBooks, shelf);
+          const isPrivate = shelf.visibility === 'private';
+          return (
+            <section key={shelf.shelfId} className="shelf-section">
+              <div className="shelf-header">
+                <h3>
+                  {shelf.name}
+                  {shelf.kind === 'custom' && <span className="shelf-count">{books.length}</span>}
+                </h3>
+                <div className="shelf-actions">
+                  <button
+                    className={`shelf-visibility-toggle ${isPrivate ? 'is-private' : ''}`}
+                    onClick={() => handleToggleVisibility(shelf)}
+                    title={isPrivate ? 'Only you can see this shelf. Make public?' : 'Friends can see this shelf. Make private?'}
+                  >
+                    {isPrivate ? <><EyeOff size={14} /> Private</> : <><Eye size={14} /> Public</>}
+                  </button>
+                  {shelf.kind === 'custom' && (
+                    <button className="icon-btn" onClick={() => setEditingShelf(shelf)} aria-label={`Edit ${shelf.name}`}>
+                      <Pencil size={14} />
+                    </button>
                   )}
-                  <div className="book-card-info">
-                    <h4>{book.title}</h4>
-                    <p>{book.author}</p>
-                    {/* Rating */}
-                    <div className="book-card-rating" onClick={(e) => e.stopPropagation()}>
-                      <BookRating
-                        rating={book.rating || 0}
-                        onRatingChange={(rating) => handleRatingChange(book.isbn, rating)}
-                        theme={currentTheme}
-                        size="small"
-                        interactive={true}
-                      />
-                    </div>
-                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        ))}
+              </div>
+
+              {books.length > 0 ? (
+                <div className="books-grid">
+                  {books.map((book) => (
+                    <BookCard
+                      key={book.isbn}
+                      book={book}
+                      session={getSessionForBook(book.isbn)}
+                      theme={currentTheme}
+                      onOpen={setSelectedBook}
+                      onRatingChange={handleRatingChange}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="shelf-empty">
+                  Add books to this shelf from a book's details.
+                </p>
+              )}
+            </section>
+          );
+        })}
       </div>
 
       {myBooks.length === 0 && (
         <div className="empty-library">
           <p>Your library is empty</p>
-          <p>Add your first book to get started!</p>
+          <p>Search for a book above to add your first one.</p>
         </div>
       )}
 
       {selectedBook && (
-        <BookDetail 
+        <BookDetail
           book={selectedBook}
-          onClose={handleCloseDetail}
+          customShelves={customShelves}
+          onClose={() => setSelectedBook(null)}
           onStartSession={handleStartSession}
           onUpdateBook={handleUpdateBook}
+          onOpenSession={() => {
+            setSelectedBook(null);
+            onNavigate && onNavigate('sessions');
+          }}
         />
       )}
 
+      {editingShelf && (
+        <ShelfEditor
+          shelf={editingShelf === 'new' ? null : editingShelf}
+          onSave={handleSaveShelf}
+          onDelete={editingShelf === 'new' ? null : handleDeleteShelf}
+          onClose={() => setEditingShelf(null)}
+        />
+      )}
     </div>
   );
 }

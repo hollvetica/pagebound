@@ -1,0 +1,54 @@
+/* Unread comments badge, top-right of the cover */
+.book-card-badge {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--color-surface-sunken);
+}
+
+/* Progress bar with the session's reader count, flush with the cover's right edge */
+.book-card-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.book-card-progress .book-progress-bar {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.book-card-readers {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.book-card-readers svg {
+  color: var(--color-primary);
+}
+
+.book-card:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}

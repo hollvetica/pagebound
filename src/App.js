@@ -32,7 +32,7 @@ function App() {
       case 'home':
         return <Home />;
       case 'library':
-        return <Library />;
+        return <Library onNavigate={setCurrentPage} />;
       case 'sessions':
         return <Sessions />;
       case 'friends':
