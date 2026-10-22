@@ -7,6 +7,7 @@ import './QuickSessionSetup.css';
 function QuickSessionSetup({ activity, onClose, onCreateSession }) {
   const { friends } = useFriends();
   const activityFriend = friends.find(f =>
+    f.friendUserId === activity.friendUserId ||
     [f.friendDisplayName, f.friendUsername].includes(activity.friend)
   );
 

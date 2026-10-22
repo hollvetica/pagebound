@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useFriends } from '../context/FriendsContext';
 import { useSession } from '../context/SessionContext';
 import { STATUS_SHELF_NAMES, statusOf } from '../utils/shelves';
+import RecommendSheet from '../components/RecommendSheet';
 import './BookDetail.css';
 
 function BookDetail({ book, customShelves = [], onClose, onStartSession, onUpdateBook, onOpenSession }) {
@@ -16,6 +17,7 @@ function BookDetail({ book, customShelves = [], onClose, onStartSession, onUpdat
   const [trackingMode, setTrackingMode] = useState('chapters');
   const [sessionError, setSessionError] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [recommending, setRecommending] = useState(false);
   const { friends } = useFriends();
   const { getSessionForBook } = useSession();
   const existingSession = getSessionForBook(book.isbn);
@@ -315,6 +317,8 @@ function BookDetail({ book, customShelves = [], onClose, onStartSession, onUpdat
 
         {sessionError && <div className="error-message book-session-error">{sessionError}</div>}
 
+        {recommending && <RecommendSheet book={book} onClose={() => setRecommending(false)} />}
+
         <div className="book-actions">
           {!showSessionForm ? (
             <>
@@ -336,6 +340,9 @@ function BookDetail({ book, customShelves = [], onClose, onStartSession, onUpdat
                   📖 Start Reading Session
                 </button>
               )}
+              <button className="secondary-button" onClick={() => setRecommending(true)}>
+                💌 Recommend to a friend
+              </button>
             </>
           ) : (
             <>

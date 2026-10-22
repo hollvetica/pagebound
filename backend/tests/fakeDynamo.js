@@ -13,7 +13,10 @@ const KEYS = {
   'pagebound-friends': ['userId', 'friendUserId'],
   'pagebound-users': ['email'],
   'pagebound-library': ['userId', 'isbn'],
-  'pagebound-shelves': ['userId', 'shelfId']
+  'pagebound-shelves': ['userId', 'shelfId'],
+  'pagebound-activity': ['actorId', 'sk'],
+  'pagebound-recommendations': ['toUserId', 'sk'],
+  'pagebound-reactions': ['itemId', 'userId']
 };
 
 const tables = {};
@@ -30,9 +33,10 @@ function resolve(token, names = {}, values = {}) {
 function matches(item, expr, names, values) {
   if (!expr) return true;
   return expr.split(/\s+AND\s+/i).every(cond => {
-    const m = cond.match(/^\s*(.+?)\s*=\s*(.+?)\s*$/);
+    const m = cond.match(/^\s*(.+?)\s*(=|>)\s*(.+?)\s*$/);
     const [attr] = resolve(m[1], names, values);
-    return item[attr] === resolve(m[2], names, values);
+    const value = resolve(m[3], names, values);
+    return m[2] === '>' ? item[attr] > value : item[attr] === value;
   });
 }
 
@@ -80,6 +84,11 @@ async function send(command) {
     let items = [...t.values()].filter(i =>
       matches(i, input.KeyConditionExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues) &&
       matches(i, input.FilterExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues));
+    // Range-key order (sk / sessionId / ...), newest first when asked
+    const rangeKey = KEYS[name][1];
+    if (rangeKey) items.sort((a, b) => String(a[rangeKey]).localeCompare(String(b[rangeKey])));
+    if (input.ScanIndexForward === false) items.reverse();
+    if (input.Limit) items = items.slice(0, input.Limit);
     return { Items: clone(items), Count: items.length };
   }
   if (command instanceof lib.BatchWriteCommand) {

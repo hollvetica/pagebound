@@ -146,3 +146,7 @@ export const deleteShelf = (userId, shelfId) =>
 // { inLibraries, inMyLibrary, activeSessions, ratingCount, ratingAverage }
 export const getBookStats = (isbn) =>
   apiJson(`/books/${encodeURIComponent(isbn)}/stats`);
+
+// A friend's public shelves: { isPrivate, shelves: [{ shelfId, name, kind, books }] }
+export const getFriendLibrary = (userId) =>
+  apiJson(`/library/${encodeURIComponent(userId)}/public`);

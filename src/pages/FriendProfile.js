@@ -2,12 +2,39 @@ import React, { useState, useEffect } from 'react';
 import { useFriends } from '../context/FriendsContext';
 import { User, Users, BookOpen, UserPlus, UserMinus } from 'lucide-react';
 import { InviteToSessionSheet } from '../components/InviteSheets';
+import { useSession } from '../context/SessionContext';
+import { getFriendLibrary } from '../utils/libraryService';
+import { isPreviewMode } from '../utils/previewMode';
 import './FriendProfile.css';
 
-function FriendProfile({ friendUserId }) {
+function FriendProfile({ friendUserId, onNavigate }) {
   const { getFriendByUserId, removeFriend } = useFriends();
+  const { sessions } = useSession();
   const [friend, setFriend] = useState(null);
   const [showInvite, setShowInvite] = useState(false);
+  const [library, setLibrary] = useState(null); // { isPrivate, shelves } once loaded
+
+  // Their public shelves
+  useEffect(() => {
+    if (!friendUserId) return undefined;
+    let cancelled = false;
+    if (isPreviewMode()) {
+      setLibrary(JSON.parse(localStorage.getItem('pagebound-preview-friend-library') || '{"isPrivate":false,"shelves":[]}'));
+      return undefined;
+    }
+    getFriendLibrary(friendUserId)
+      .then(data => { if (!cancelled) setLibrary(data); })
+      .catch(() => { if (!cancelled) setLibrary({ isPrivate: false, shelves: [], failed: true }); });
+    return () => { cancelled = true; };
+  }, [friendUserId]);
+
+  // Sessions you're both in
+  const shared = sessions.filter(s => s.participants.some(p => p.userId === friendUserId));
+  const positionIn = (session, participant) => {
+    const byPages = session.trackingMode === 'pages';
+    const value = (byPages ? participant?.currentPage : participant?.currentChapter) || 0;
+    return `${byPages ? 'p.' : 'ch.'} ${value}`;
+  };
 
   useEffect(() => {
     if (friendUserId) {
@@ -78,15 +105,41 @@ function FriendProfile({ friendUserId }) {
               <BookOpen size={18} />
               Public Bookshelves
             </h3>
-            <div className="friend-bookshelves">
-              <div className="empty-state">
-                <BookOpen size={48} />
-                <p>No public bookshelves yet</p>
-                <p className="empty-hint">
-                  {friend.friendDisplayName} hasn't made any bookshelves public
-                </p>
+            {!library ? (
+              <p className="friend-shelves-loading">Loading shelves…</p>
+            ) : library.shelves.length === 0 ? (
+              <div className="friend-bookshelves">
+                <div className="empty-state">
+                  <BookOpen size={48} />
+                  <p>{library.failed ? "Couldn't load their shelves" : 'No public bookshelves yet'}</p>
+                  <p className="empty-hint">
+                    {library.failed
+                      ? 'Please try again in a moment.'
+                      : `${friend.friendDisplayName} hasn't put books on a public shelf yet`}
+                  </p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="friend-shelves">
+                {library.shelves.map(shelf => (
+                  <div key={shelf.shelfId} className="friend-shelf">
+                    <p className="friend-shelf-name">
+                      {shelf.name} <span>{shelf.books.length}</span>
+                    </p>
+                    <div className="friend-shelf-row">
+                      {shelf.books.map(book => (
+                        <div key={book.isbn} className="friend-shelf-book" title={`${book.title}${book.author ? ` · ${book.author}` : ''}`}>
+                          <div className="friend-shelf-cover">
+                            {book.coverUrl ? <img src={book.coverUrl} alt="" /> : '📚'}
+                          </div>
+                          <p>{book.title}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="friend-profile-section">
@@ -94,15 +147,37 @@ function FriendProfile({ friendUserId }) {
               <Users size={18} />
               Shared Sessions
             </h3>
-            <div className="friend-sessions">
-              <div className="empty-state">
-                <Users size={48} />
-                <p>No shared reading sessions</p>
-                <p className="empty-hint">
-                  Start a reading session together to see it here
-                </p>
+            {shared.length === 0 ? (
+              <div className="friend-sessions">
+                <div className="empty-state">
+                  <Users size={48} />
+                  <p>No shared reading sessions</p>
+                  <p className="empty-hint">
+                    Invite {friend.friendDisplayName} to a session to read together
+                  </p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <ul className="friend-shared-sessions">
+                {shared.map(session => {
+                  const me = session.participants.find(p => p.isMe);
+                  const them = session.participants.find(p => p.userId === friendUserId);
+                  return (
+                    <li key={session.id}>
+                      <button type="button" onClick={() => onNavigate && onNavigate('sessions')}>
+                        <span className="friend-shared-cover">
+                          {session.bookCover ? <img src={session.bookCover} alt="" /> : '📚'}
+                        </span>
+                        <span className="friend-shared-text">
+                          <strong>{session.sessionName || session.bookTitle}</strong>
+                          <small>You: {positionIn(session, me)} · {friend.friendDisplayName}: {positionIn(session, them)}</small>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </>
       ) : (

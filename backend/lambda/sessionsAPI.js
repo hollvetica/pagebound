@@ -37,6 +37,20 @@ const MESSAGES_TABLE = process.env.MESSAGES_TABLE;
 const USERS_TABLE = process.env.USERS_TABLE;
 const FRIENDS_TABLE = process.env.FRIENDS_TABLE;
 
+// Feed events (read by the social Lambda). Never fails the caller's action.
+const ACTIVITY_TABLE = process.env.ACTIVITY_TABLE || 'pagebound-activity';
+async function recordActivity(actorId, type, data) {
+  try {
+    const createdAt = new Date().toISOString();
+    await dynamodb.send(new PutCommand({
+      TableName: ACTIVITY_TABLE,
+      Item: { actorId, sk: `${createdAt}#${randomUUID()}`, type, createdAt, ...data }
+    }));
+  } catch (error) {
+    console.error('Could not record activity:', error);
+  }
+}
+
 class HttpError extends Error {
   constructor(statusCode, message, extra = {}) {
     super(message);
@@ -244,6 +258,11 @@ async function createSession(event, callerId) {
       }))
     }
   }));
+
+  await recordActivity(callerId, 'session_started', {
+    book: { isbn: bookIsbn, title: bookTitle, author: bookAuthor || '', coverUrl: bookCover || null },
+    session: { readers: session.participants.length, trackingMode }
+  });
 
   return json(201, { session: await withParticipantDetails(session) });
 }

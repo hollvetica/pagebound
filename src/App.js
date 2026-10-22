@@ -38,7 +38,7 @@ function App() {
       case 'friends':
         return <Friends onNavigateToFriendProfile={handleViewFriendProfile} />;
       case 'friendProfile':
-        return <FriendProfile friendUserId={selectedFriendId} />;
+        return <FriendProfile friendUserId={selectedFriendId} onNavigate={setCurrentPage} />;
       case 'profile':
         return <Profile
           onNavigateToSettings={() => setCurrentPage('settings')}

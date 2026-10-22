@@ -2,8 +2,8 @@
 // A reader's books, shelves, and community stats for a book.
 //
 // Every request is authenticated by the API Gateway Cognito authorizer; the
-// caller (claims.sub) may only read and change their own library. Friends
-// viewing public shelves comes later and will be added here.
+// caller (claims.sub) may only change their own library; friends can read
+// its public shelves (GET /library/{userId}/public).
 //
 // A book has one reading status in `shelf` (Want to Read / Currently Reading /
 // Finished) and may also sit on any number of the reader's custom shelves,
@@ -34,6 +34,22 @@ const STATUS_SHELVES = [
 ];
 const VISIBILITIES = ['public', 'private'];
 const MAX_CUSTOM_SHELVES = 50;
+const FRIENDS_TABLE = process.env.FRIENDS_TABLE || 'pagebound-friends';
+const USERS_TABLE = process.env.USERS_TABLE || 'pagebound-users';
+
+// Feed events (read by the social Lambda). Never fails the caller's action.
+const ACTIVITY_TABLE = process.env.ACTIVITY_TABLE || 'pagebound-activity';
+async function recordActivity(actorId, type, data) {
+  try {
+    const createdAt = new Date().toISOString();
+    await dynamodb.send(new PutCommand({
+      TableName: ACTIVITY_TABLE,
+      Item: { actorId, sk: `${createdAt}#${randomUUID()}`, type, createdAt, ...data }
+    }));
+  } catch (error) {
+    console.error('Could not record activity:', error);
+  }
+}
 
 // Shelves that count as "finished" for stats (the UI says Finished; older data said Read)
 const FINISHED_SHELVES = ['Finished', 'Read'];
@@ -163,6 +179,10 @@ async function addBook(event, callerId) {
     throw error;
   }
 
+  const bookCard = { isbn: item.isbn, title: item.title, author: item.author || '', coverUrl: item.coverUrl || null };
+  await recordActivity(userId, item.shelf === 'Currently Reading' ? 'started_reading' : 'book_added',
+    { book: bookCard, shelf: item.shelf });
+
   return json(201, { book: item });
 }
 
@@ -199,7 +219,19 @@ async function updateBook(event, callerId) {
     ReturnValues: 'ALL_NEW'
   }));
 
-  return json(200, { book: result.Attributes });
+  const book = result.Attributes;
+  if (updates.shelf && updates.shelf !== existing.Item.shelf) {
+    const type = updates.shelf === 'Currently Reading' ? 'started_reading'
+      : FINISHED_SHELVES.includes(updates.shelf) ? 'finished_book' : null;
+    if (type) {
+      await recordActivity(userId, type, {
+        book: { isbn: book.isbn, title: book.title, author: book.author || '', coverUrl: book.coverUrl || null },
+        shelf: updates.shelf
+      });
+    }
+  }
+
+  return json(200, { book });
 }
 
 // DELETE /library/{userId}/books/{isbn}
@@ -379,6 +411,57 @@ async function deleteShelf(event, callerId) {
   return json(200, { ok: true });
 }
 
+// ---------------------------------------------------------------- friends' shelves
+
+// GET /library/{userId}/public – the shelves a reader made public, for friends
+async function publicLibrary(event, callerId) {
+  const userId = event.pathParameters?.userId;
+  if (userId !== callerId) {
+    const friendship = await dynamodb.send(new GetCommand({
+      TableName: FRIENDS_TABLE, Key: { userId: callerId, friendUserId: userId }
+    }));
+    if (!friendship.Item) throw new HttpError(403, 'Only friends can see this library');
+  }
+
+  const owner = await dynamodb.send(new QueryCommand({
+    TableName: USERS_TABLE,
+    IndexName: 'userId-index',
+    KeyConditionExpression: 'userId = :u',
+    ExpressionAttributeValues: { ':u': userId }
+  }));
+  if (owner.Items?.[0]?.isPrivate && userId !== callerId) {
+    return json(200, { isPrivate: true, shelves: [] });
+  }
+
+  const [shelves, books] = await Promise.all([
+    shelvesFor(userId),
+    dynamodb.send(new QueryCommand({
+      TableName: LIBRARY_TABLE,
+      KeyConditionExpression: 'userId = :u',
+      ExpressionAttributeValues: { ':u': userId }
+    })).then(r => r.Items || [])
+  ]);
+
+  const statusOf = (b) => (b.shelf === 'Read' ? 'Finished' : b.shelf);
+  const card = (b) => ({
+    isbn: b.isbn, title: b.title, author: b.author || '', coverUrl: b.coverUrl || null, rating: b.rating || 0
+  });
+
+  const visible = shelves
+    .filter(s => s.visibility !== 'private')
+    .map(s => ({
+      shelfId: s.shelfId,
+      name: s.name,
+      kind: s.kind,
+      books: books
+        .filter(b => (s.kind === 'status' ? statusOf(b) === s.name : (b.shelves || []).includes(s.shelfId)))
+        .map(card)
+    }))
+    .filter(s => s.books.length > 0);
+
+  return json(200, { isPrivate: false, shelves: visible });
+}
+
 // ---------------------------------------------------------------- book stats
 
 // GET /books/{isbn}/stats - community totals only, never who
@@ -424,7 +507,8 @@ const routes = [
   ['POST', /^\/library\/[^/]+\/shelves$/, createShelf],
   ['PUT', /^\/library\/[^/]+\/shelves\/[^/]+$/, updateShelf],
   ['DELETE', /^\/library\/[^/]+\/shelves\/[^/]+$/, deleteShelf],
-  ['GET', /^\/books\/[^/]+\/stats$/, bookStats]
+  ['GET', /^\/books\/[^/]+\/stats$/, bookStats],
+  ['GET', /^\/library\/[^/]+\/public$/, publicLibrary]
 ];
 
 exports.handler = async (event) => {

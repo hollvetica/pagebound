@@ -17,6 +17,9 @@ process.env.USERS_TABLE = 'pagebound-users';
 process.env.FRIENDS_TABLE = 'pagebound-friends';
 process.env.LIBRARY_TABLE = 'pagebound-library';
 process.env.SHELVES_TABLE = 'pagebound-shelves';
+process.env.ACTIVITY_TABLE = 'pagebound-activity';
+process.env.RECOMMENDATIONS_TABLE = 'pagebound-recommendations';
+process.env.REACTIONS_TABLE = 'pagebound-reactions';
 
 const db = require('./fakeDynamo');
 const sessions = require('../lambda/sessionsAPI');
@@ -455,6 +458,107 @@ test('invitees can leave (freeing the book); the host cannot leave; nobody can r
 
   const boOwn = await call(sessions, 'POST', '/sessions', { caller: 'bo', body: book });
   assert.strictEqual(boOwn.status, 201, 'Bo can start their own session for the book now');
+});
+
+// ---------------------------------------------------------------- feed
+const social = require('../lambda/socialAPI');
+const feedOf = async (who) => (await call(social, 'GET', '/feed', { caller: who })).body;
+const addBook = (who, isbn, extra = {}) => call(library, 'POST', `/library/${who}/books`, {
+  caller: who, pathParameters: { userId: who }, body: { isbn, title: `Book ${isbn}`, ...extra }
+});
+
+test('feed: friends\' library and session activity, newest first; not strangers\'', async () => {
+  await addBook('bo', '111');
+  await new Promise(r => setTimeout(r, 5));
+  await call(library, 'PUT', '/library/bo/books/111', { caller: 'bo', pathParameters: { userId: 'bo', isbn: '111' }, body: { shelf: 'Currently Reading' } });
+  await new Promise(r => setTimeout(r, 5));
+  await call(library, 'PUT', '/library/bo/books/111', { caller: 'bo', pathParameters: { userId: 'bo', isbn: '111' }, body: { rating: 4 } });
+  await addBook('cy', '222'); // Cy is not Ann's friend
+  await new Promise(r => setTimeout(r, 5));
+  await call(sessions, 'POST', '/sessions', { caller: 'bo', body: { ...book, bookIsbn: '333' } });
+
+  const feed = await feedOf('ann');
+  assert.deepStrictEqual(feed.items.map(i => `${i.actor.displayName}:${i.type}`),
+    ['Bo:session_started', 'Bo:started_reading', 'Bo:book_added'], 'rating changes are not events');
+  assert.strictEqual(feed.items[0].session.readers, 1);
+  assert.deepStrictEqual(feed.reactionSet, ['❤️', '🔥', '😂', '😮', '📚']);
+  assert.strictEqual((await feedOf('cy')).items.length, 0, 'Cy has no friends, so an empty feed');
+});
+
+test('feed respects privacy: private status shelves and private profiles', async () => {
+  await addBook('bo', '111');
+  await call(library, 'PUT', '/library/bo/shelves/want-to-read', {
+    caller: 'bo', pathParameters: { userId: 'bo', shelfId: 'want-to-read' }, body: { visibility: 'private' }
+  });
+  assert.strictEqual((await feedOf('ann')).items.length, 0, 'making the shelf private hides past events too');
+
+  await addBook('bo', '444', { shelf: 'Currently Reading' });
+  assert.strictEqual((await feedOf('ann')).items.length, 1);
+
+  db.table('pagebound-users').get('bo@test').isPrivate = true;
+  assert.strictEqual((await feedOf('ann')).items.length, 0);
+});
+
+test('reactions: preset only, one per person, toggle off, friends only', async () => {
+  await addBook('bo', '111');
+  const item = (await feedOf('ann')).items[0];
+  const react = (who, emoji) => call(social, 'PUT', `/feed/items/${encodeURIComponent(item.itemId)}/reactions`, {
+    caller: who, pathParameters: { itemId: encodeURIComponent(item.itemId) }, body: { emoji }
+  });
+
+  assert.strictEqual((await react('ann', '💩')).status, 400);
+  assert.deepStrictEqual((await react('ann', '❤️')).body.reactions, { counts: { '❤️': 1 }, mine: '❤️' });
+  assert.deepStrictEqual((await react('ann', '🔥')).body.reactions, { counts: { '🔥': 1 }, mine: '🔥' }, 'changing replaces');
+  assert.deepStrictEqual((await react('bo', '🔥')).body.reactions, { counts: { '🔥': 2 }, mine: '🔥' }, 'the actor can react too');
+  assert.strictEqual((await react('cy', '❤️')).status, 403, 'strangers cannot');
+  assert.deepStrictEqual((await react('ann', null)).body.reactions, { counts: { '🔥': 1 }, mine: null });
+
+  const feed = await feedOf('ann');
+  assert.deepStrictEqual(feed.items[0].reactions, { counts: { '🔥': 1 }, mine: null });
+});
+
+test('recommendations: friends only; appear in the recipient\'s feed with the note', async () => {
+  const send = (who, toUserIds, note) => call(social, 'POST', '/recommendations', {
+    caller: who, body: { toUserIds, note, book: { isbn: '555', title: 'Circe', author: 'Madeline Miller' } }
+  });
+  assert.strictEqual((await send('ann', ['cy'])).status, 403);
+  assert.strictEqual((await send('ann', [])).status, 400);
+  const sent = await send('ann', ['bo', 'bo', 'ann'], '  You will love this  ');
+  assert.strictEqual(sent.status, 201);
+  assert.strictEqual(sent.body.sent, 1);
+
+  const bo = await feedOf('bo');
+  assert.strictEqual(bo.items.length, 1);
+  assert.strictEqual(bo.items[0].type, 'recommendation');
+  assert.strictEqual(bo.items[0].actor.displayName, 'Ann');
+  assert.strictEqual(bo.items[0].note, 'You will love this');
+  assert.strictEqual(bo.items[0].book.title, 'Circe');
+
+  const reactByBo = await call(social, 'PUT', `/feed/items/x/reactions`, {
+    caller: 'bo', pathParameters: { itemId: encodeURIComponent(bo.items[0].itemId) }, body: { emoji: '📚' }
+  });
+  assert.strictEqual(reactByBo.status, 200);
+});
+
+// ---------------------------------------------------------------- friends' shelves
+test('public library: friends see public shelves with books; private hidden; strangers refused', async () => {
+  const lib = (who, owner) => call(library, 'GET', `/library/${owner}/public`, { caller: who, pathParameters: { userId: owner } });
+  await addBook('bo', '111');
+  await addBook('bo', '222', { shelf: 'Currently Reading' });
+  const club = (await call(library, 'POST', '/library/bo/shelves', { caller: 'bo', pathParameters: { userId: 'bo' }, body: { name: 'Club', visibility: 'public' } })).body.shelf;
+  const secret = (await call(library, 'POST', '/library/bo/shelves', { caller: 'bo', pathParameters: { userId: 'bo' }, body: { name: 'Secret', visibility: 'private' } })).body.shelf;
+  await call(library, 'PUT', '/library/bo/books/111', { caller: 'bo', pathParameters: { userId: 'bo', isbn: '111' }, body: { shelves: [club.shelfId, secret.shelfId] } });
+  await call(library, 'PUT', '/library/bo/shelves/want-to-read', { caller: 'bo', pathParameters: { userId: 'bo', shelfId: 'want-to-read' }, body: { visibility: 'private' } });
+
+  const seen = await lib('ann', 'bo');
+  assert.strictEqual(seen.status, 200);
+  assert.deepStrictEqual(seen.body.shelves.map(s => `${s.name}:${s.books.map(b => b.isbn).join(',')}`),
+    ['Currently Reading:222', 'Club:111'], 'private shelves and empty shelves are left out');
+  assert.ok(!('shelves' in seen.body.shelves[1].books[0]), 'only a book card is shared');
+
+  assert.strictEqual((await lib('cy', 'bo')).status, 403);
+  db.table('pagebound-users').get('bo@test').isPrivate = true;
+  assert.deepStrictEqual((await lib('ann', 'bo')).body, { isPrivate: true, shelves: [] });
 });
 
 (async () => {
