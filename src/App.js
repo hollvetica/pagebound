@@ -28,6 +28,11 @@ function App() {
   };
 
   const renderPage = () => {
+    // Dev-only pattern library for feed notifications: ?preview&patterns
+    if (process.env.NODE_ENV === 'development' && window.location.search.includes('patterns')) {
+      const NotificationPatterns = require('./pages/NotificationPatterns').default;
+      return <NotificationPatterns />;
+    }
     switch(currentPage) {
       case 'home':
         return <Home />;

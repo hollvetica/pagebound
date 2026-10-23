@@ -13,6 +13,9 @@ import './Home.css';
 const REFRESH_MS = 60000;
 const DEFAULT_REACTIONS = ['❤️', '🔥', '😂', '😮', '📚'];
 const PREVIEW_FEED_KEY = 'pagebound-preview-feed';
+// Dev preview shows one card of every notification type; bump to refresh it
+const SAMPLE_FEED_VERSION = 'patterns-3';
+const SAMPLE_VERSION_KEY = 'pagebound-preview-feed-version';
 
 function Home() {
   const { sessions, createSession } = useSession();
@@ -27,6 +30,12 @@ function Home() {
 
   const loadFeed = useCallback(async () => {
     if (preview) {
+      // require() inside the dev check keeps the samples out of production bundles
+      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEMO !== 'true' && localStorage.getItem(SAMPLE_VERSION_KEY) !== SAMPLE_FEED_VERSION) {
+        const { buildSampleFeed } = require('../components/feed/feedSamples');
+        localStorage.setItem(PREVIEW_FEED_KEY, JSON.stringify(buildSampleFeed()));
+        localStorage.setItem(SAMPLE_VERSION_KEY, SAMPLE_FEED_VERSION);
+      }
       setFeed(JSON.parse(localStorage.getItem(PREVIEW_FEED_KEY) || '[]'));
       setFeedLoading(false);
       return;
