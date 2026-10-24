@@ -576,7 +576,7 @@ test('invitees can leave (freeing the book); the host cannot leave; nobody can r
 
 // ---------------------------------------------------------------- feed
 const social = require('../lambda/socialAPI');
-const feedOf = async (who) => (await call(social, 'GET', '/feed', { caller: who })).body;
+const feedOf = async (who) => (await call(social, 'GET', '/feed', { caller: who, query: { include: 'trending' } })).body;
 const addBook = (who, isbn, extra = {}) => call(library, 'POST', `/library/${who}/books`, {
   caller: who, pathParameters: { userId: who }, body: { isbn, title: `Book ${isbn}`, ...extra }
 });
@@ -675,6 +675,9 @@ test('community: a book three readers picked up this week is trending', async ()
   assert.strictEqual(t.audience, 'community');
   assert.strictEqual(t.book.isbn, '777');
   assert.ok(!('reactions' in t));
+
+  const older = (await call(social, 'GET', '/feed', { caller: 'ann' })).body.items;
+  assert.ok(older.length > 0 && older.every(i => i.actor), 'apps that don\'t ask get no actor-less items');
 });
 
 test('bots: hidden from everyone without showBots; visible with it', async () => {

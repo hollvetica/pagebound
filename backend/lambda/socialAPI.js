@@ -17,6 +17,8 @@
 //
 // Feed items are identified as "a|<actorId>|<sk>" (activity),
 // "r|<toUserId>|<sk>" (recommendation) or "t|<isbn>|<week>" (trending).
+// Trending items have no actor, which older app versions can't render, so
+// they're only sent to apps that ask for them (GET /feed?include=trending).
 //
 // The feed mixes friends' activity with everyone else's ("Around Pagebound",
 // audience: 'community'). Readers leave the public feed by making their
@@ -192,7 +194,7 @@ const activityItem = (item, actor, extra = {}) => ({
 
 // "Around Pagebound": public readers who aren't the caller's friends, plus
 // books several readers picked up this week
-async function communityItems(callerId, friendIds) {
+async function communityItems(callerId, friendIds, { withTrending }) {
   const showBots = await seesBots(callerId);
   const friends = new Set(friendIds);
   const recent = await recentActivity(daysAgo(COMMUNITY_DAYS));
@@ -238,7 +240,7 @@ async function communityItems(callerId, friendIds) {
       createdAt: t.latest
     }));
 
-  return [...community, ...trending];
+  return withTrending ? [...community, ...trending] : community;
 }
 
 // GET /feed – friends' recent activity, recommendations to the caller, and
@@ -281,7 +283,9 @@ async function getFeed(event, callerId) {
     createdAt: r.createdAt
   })));
 
-  const items = [...activity, ...recommendations, ...(await communityItems(callerId, friendIds))]
+  const include = String(event.queryStringParameters?.include || '').split(',');
+  const community = await communityItems(callerId, friendIds, { withTrending: include.includes('trending') });
+  const items = [...activity, ...recommendations, ...community]
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     .slice(0, FEED_LIMIT);
 

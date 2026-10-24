@@ -2,7 +2,9 @@
 import { apiJson } from './apiFetch';
 
 // { items: [...], reactionSet: ['❤️', ...] }
-export const getFeed = () => apiJson('/feed');
+// This app renders trending cards (they have no actor, so the server only
+// sends them when asked)
+export const getFeed = () => apiJson('/feed?include=trending');
 
 // Set, change, or clear (emoji: null) your reaction to a feed item
 export const setReaction = (itemId, emoji) =>
