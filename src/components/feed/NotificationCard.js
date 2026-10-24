@@ -13,6 +13,8 @@ export const timeAgo = (iso) => {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
 
+const WANT_TO_READ = { id: 'add_to_library', label: 'Want to read', done: 'On your shelf' };
+
 // Letter avatars get one of six muted inks, fixed per person
 const inkFor = (id = '') => [...id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 6;
 
@@ -207,12 +209,16 @@ function Body({ item, form, tier }) {
 // One floating notification. state: { [actionId]: true | 'busy' | errorText }
 function NotificationCard({ item, reactionSet = [], onReact, onAction, state = {}, index = 0, still = false }) {
   const def = typeFor(item.type);
-  const { tier, form } = def;
+  // The server marks non-friends' public activity as community: same body,
+  // quieter "Around Pagebound" treatment, and no friend-only actions
+  const community = item.audience === 'community' && def.tier !== 'community';
+  const tier = community ? 'community' : def.tier;
+  const { form } = def;
   // A folded card borrows the label and icon of what it folds
   const base = item.type === 'grouped' ? typeFor(item.group.type) : def;
   const Icon = base.icon;
   const showCover = item.book?.coverUrl && !['match', 'milestone', 'recap'].includes(form);
-  const actions = def.actions || [];
+  const actions = community ? (item.book ? [WANT_TO_READ] : []) : def.actions || [];
   const doneAction = actions.find(a => state[a.id] === true);
   const error = Object.values(state).find(v => typeof v === 'string' && v !== 'busy');
   const emblem = tier === 'pagebound' || tier === 'community' || !item.actor;

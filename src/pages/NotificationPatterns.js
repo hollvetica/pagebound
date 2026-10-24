@@ -10,7 +10,7 @@ const REACTIONS = ['❤️', '🔥', '😂', '😮', '📚'];
 
 // Live = works with what the backend sends today (grouping runs on the client).
 // The rest only exist in the sample feed.
-const LIVE_TYPES = ['grouped', 'started_reading', 'book_added', 'finished_book', 'book_reviewed', 'session_started', 'recommendation'];
+const LIVE_TYPES = ['grouped', 'trending','started_reading', 'book_added', 'finished_book', 'book_reviewed', 'session_started', 'recommendation'];
 
 function NotificationPatterns() {
   const [items, setItems] = useState(buildSampleFeed);

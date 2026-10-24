@@ -28,7 +28,7 @@ export const TIERS = {
   },
   community: {
     label: 'Around Pagebound',
-    summary: 'The wider readership: trending books, new releases, reviews from readers you don\'t know.',
+    summary: 'Everyone else on Pagebound: what public readers you don\'t follow are reading and reviewing, plus trending books. Private profiles stay out.',
     treatment: 'Patina accent, sunken glassy card, emblem instead of a face, smaller type. Quiet by design.'
   }
 };
@@ -172,7 +172,7 @@ export const TYPES = {
 
   // ---------------------------------------------------------------- community
   trending: {
-    tier: 'community', form: 'stack', label: 'Trending', icon: TrendingUp, reactable: true,
+    tier: 'community', form: 'stack', label: 'Trending', icon: TrendingUp,
     headline: (i) => <>{title(i)} is trending · {i.count?.toLocaleString()} readers started it this week</>,
     actions: [{ id: 'add_to_library', label: 'Want to read', done: 'On your shelf' }]
   },

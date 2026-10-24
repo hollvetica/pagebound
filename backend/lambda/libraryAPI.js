@@ -51,6 +51,19 @@ async function recordActivity(actorId, type, data) {
   }
 }
 
+// Bot readers (userId "bot-...") are test content, counted only for accounts
+// with showBots on their profile. See backend/scripts/bots.js.
+const isBot = (userId) => String(userId || '').startsWith('bot-');
+async function seesBots(userId) {
+  const result = await dynamodb.send(new QueryCommand({
+    TableName: USERS_TABLE,
+    IndexName: 'userId-index',
+    KeyConditionExpression: 'userId = :u',
+    ExpressionAttributeValues: { ':u': userId }
+  }));
+  return !!result.Items?.[0]?.showBots;
+}
+
 // Shelves that count as "finished" for stats (the UI says Finished; older data said Read)
 const FINISHED_SHELVES = ['Finished', 'Read'];
 
@@ -480,7 +493,8 @@ async function bookStats(event, callerId) {
     KeyConditionExpression: 'isbn = :isbn',
     ExpressionAttributeValues: { ':isbn': isbn }
   }));
-  const items = owners.Items || [];
+  const showBots = await seesBots(callerId);
+  const items = (owners.Items || []).filter(b => showBots || !isBot(b.userId));
   const ratings = items.map(b => Number(b.rating) || 0).filter(r => r > 0);
 
   const sessions = await dynamodb.send(new QueryCommand({
@@ -494,7 +508,7 @@ async function bookStats(event, callerId) {
     isbn,
     inLibraries: items.length,
     inMyLibrary: items.some(b => b.userId === callerId),
-    activeSessions: (sessions.Items || []).length,
+    activeSessions: (sessions.Items || []).filter(s => showBots || !isBot(s.hostUserId)).length,
     ratingCount: ratings.length,
     ratingAverage: ratings.length
       ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10

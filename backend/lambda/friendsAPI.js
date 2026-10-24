@@ -22,6 +22,10 @@ async function getUserByUserId(userId) {
   return result.Items && result.Items.length > 0 ? result.Items[0] : null;
 }
 
+// Bot readers (userId "bot-...") are test content, shown only to accounts with
+// showBots on their profile. See backend/scripts/bots.js.
+const isBot = (userId) => String(userId || '').startsWith('bot-');
+
 // Helper function to get user profile data (for caching)
 function getUserProfileData(user) {
   return {
@@ -419,22 +423,32 @@ exports.handler = async (event) => {
           body: JSON.stringify({ error: 'Search query must be at least 2 characters' })
         };
       } else {
-        // Scan users table for matching usernames
-        const scanResult = await dynamodb.send(new ScanCommand({
-          TableName: process.env.USERS_TABLE,
-          FilterExpression: 'contains(#username, :query)',
-          ExpressionAttributeNames: {
-            '#username': 'username'
-          },
-          ExpressionAttributeValues: {
-            ':query': searchQuery
-          },
-          Limit: 20 // Limit results
-        }));
+        // Scan users table for matching usernames. (A scan's Limit counts the
+        // rows read, not the matches, so read every page and cap afterwards.)
+        const matches = [];
+        let ExclusiveStartKey;
+        do {
+          const page = await dynamodb.send(new ScanCommand({
+            TableName: process.env.USERS_TABLE,
+            FilterExpression: 'contains(#username, :query)',
+            ExpressionAttributeNames: {
+              '#username': 'username'
+            },
+            ExpressionAttributeValues: {
+              ':query': searchQuery
+            },
+            ExclusiveStartKey
+          }));
+          matches.push(...(page.Items || []));
+          ExclusiveStartKey = page.LastEvaluatedKey;
+        } while (ExclusiveStartKey);
 
-        // Filter out private profiles and the current user
-        const users = (scanResult.Items || [])
-          .filter(user => user.userId !== userId && !user.isPrivate)
+        const showBots = !!(await getUserByUserId(userId))?.showBots;
+
+        // Filter out private profiles, the current user and (usually) bots
+        const users = matches
+          .filter(user => user.userId !== userId && !user.isPrivate && (showBots || !isBot(user.userId)))
+          .slice(0, 20)
           .map(user => ({
             userId: user.userId,
             username: user.username,

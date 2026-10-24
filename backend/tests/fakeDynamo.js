@@ -34,6 +34,11 @@ function resolve(token, names = {}, values = {}) {
 function matches(item, expr, names, values) {
   if (!expr) return true;
   return expr.split(/\s+AND\s+/i).every(cond => {
+    const c = cond.match(/^\s*contains\((.+?),\s*(.+?)\)\s*$/);
+    if (c) {
+      const [attr] = resolve(c[1], names, values);
+      return String(item[attr] ?? '').includes(resolve(c[2], names, values));
+    }
     const m = cond.match(/^\s*(.+?)\s*(=|>)\s*(.+?)\s*$/);
     const [attr] = resolve(m[1], names, values);
     const value = resolve(m[3], names, values);

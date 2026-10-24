@@ -340,8 +340,10 @@ function Settings() {
           <div>
             <p className="settings-toggle-label">Private profile</p>
             <p className="section-note">
-              Friends won't see your shelves, reviews or activity, and your reviews show as
-              "A Pagebound reader". You can still read together in sessions.
+              Off: everyone on Pagebound can see what you're reading in their feed. On: you're
+              left out of everyone's feed and search, friends won't see your shelves, reviews
+              or activity, and your reviews show as "A Pagebound reader". You can still read
+              together in sessions.
             </p>
           </div>
           <button

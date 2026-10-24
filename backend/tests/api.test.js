@@ -581,7 +581,7 @@ const addBook = (who, isbn, extra = {}) => call(library, 'POST', `/library/${who
   caller: who, pathParameters: { userId: who }, body: { isbn, title: `Book ${isbn}`, ...extra }
 });
 
-test('feed: friends\' library and session activity, newest first; not strangers\'', async () => {
+test('feed: friends\' library and session activity, newest first; strangers as community', async () => {
   await addBook('bo', '111');
   await new Promise(r => setTimeout(r, 5));
   await call(library, 'PUT', '/library/bo/books/111', { caller: 'bo', pathParameters: { userId: 'bo', isbn: '111' }, body: { shelf: 'Currently Reading' } });
@@ -592,11 +592,15 @@ test('feed: friends\' library and session activity, newest first; not strangers\
   await call(sessions, 'POST', '/sessions', { caller: 'bo', body: { ...book, bookIsbn: '333' } });
 
   const feed = await feedOf('ann');
-  assert.deepStrictEqual(feed.items.map(i => `${i.actor.displayName}:${i.type}`),
+  const fromFriends = feed.items.filter(i => i.audience !== 'community');
+  assert.deepStrictEqual(fromFriends.map(i => `${i.actor.displayName}:${i.type}`),
     ['Bo:session_started', 'Bo:started_reading', 'Bo:book_added'], 'rating changes are not events');
-  assert.strictEqual(feed.items[0].session.readers, 1);
+  assert.strictEqual(fromFriends[0].session.readers, 1);
+  assert.deepStrictEqual(feed.items.filter(i => i.audience === 'community').map(i => `${i.actor.displayName}:${i.type}`),
+    ['Cy:book_added'], 'a public stranger shows up as community');
   assert.deepStrictEqual(feed.reactionSet, ['❤️', '🔥', '😂', '😮', '📚']);
-  assert.strictEqual((await feedOf('cy')).items.length, 0, 'Cy has no friends, so an empty feed');
+  const cyFeed = (await feedOf('cy')).items;
+  assert.ok(cyFeed.length > 0 && cyFeed.every(i => i.audience === 'community'), 'Cy has no friends, so only community');
 });
 
 test('feed respects privacy: private status shelves and private profiles', async () => {
@@ -624,11 +628,80 @@ test('reactions: preset only, one per person, toggle off, friends only', async (
   assert.deepStrictEqual((await react('ann', '❤️')).body.reactions, { counts: { '❤️': 1 }, mine: '❤️' });
   assert.deepStrictEqual((await react('ann', '🔥')).body.reactions, { counts: { '🔥': 1 }, mine: '🔥' }, 'changing replaces');
   assert.deepStrictEqual((await react('bo', '🔥')).body.reactions, { counts: { '🔥': 2 }, mine: '🔥' }, 'the actor can react too');
-  assert.strictEqual((await react('cy', '❤️')).status, 403, 'strangers cannot');
+  db.table('pagebound-users').get('bo@test').isPrivate = true;
+  assert.strictEqual((await react('cy', '❤️')).status, 403, 'strangers cannot react to a private reader');
+  db.table('pagebound-users').get('bo@test').isPrivate = false;
   assert.deepStrictEqual((await react('ann', null)).body.reactions, { counts: { '🔥': 1 }, mine: null });
 
   const feed = await feedOf('ann');
   assert.deepStrictEqual(feed.items[0].reactions, { counts: { '🔥': 1 }, mine: null });
+});
+
+// ---------------------------------------------------------------- everyone feed & bots
+const addBot = (name) => db.table('pagebound-users').set(`${name}@bots`, {
+  email: `${name}@bots`, userId: `bot-${name}`, username: `${name}.reads`, displayName: name, isBot: true
+});
+const showBotsTo = (who) => { db.table('pagebound-users').get(`${who}@test`).showBots = true; };
+
+test('community: public strangers only; private readers and private shelves stay out', async () => {
+  await addBook('cy', '222');
+  const react = (who, itemId) => call(social, 'PUT', `/feed/items/${encodeURIComponent(itemId)}/reactions`, {
+    caller: who, pathParameters: { itemId: encodeURIComponent(itemId) }, body: { emoji: '❤️' }
+  });
+  const item = (await feedOf('ann')).items.find(i => i.audience === 'community');
+  assert.strictEqual(item.actor.displayName, 'Cy');
+  assert.strictEqual((await react('ann', item.itemId)).status, 200, 'anyone can react to public activity');
+
+  await call(library, 'PUT', '/library/cy/shelves/want-to-read', {
+    caller: 'cy', pathParameters: { userId: 'cy', shelfId: 'want-to-read' }, body: { visibility: 'private' }
+  });
+  assert.strictEqual((await feedOf('ann')).items.length, 0, 'private shelf');
+
+  await addBook('cy', '333', { shelf: 'Currently Reading' });
+  assert.strictEqual((await feedOf('ann')).items.length, 1);
+  db.table('pagebound-users').get('cy@test').isPrivate = true;
+  assert.strictEqual((await feedOf('ann')).items.length, 0, 'private profile leaves the public feed');
+});
+
+test('community: a book three readers picked up this week is trending', async () => {
+  for (const who of ['ann', 'bo', 'cy']) await addBook(who, '777', { title: 'The Starless Sea' });
+  const trending = (await feedOf('ann')).items.filter(i => i.type === 'trending');
+  assert.strictEqual(trending.length, 0, 'the caller does not count toward their own trending');
+
+  db.table('pagebound-users').set('di@test', { email: 'di@test', userId: 'di', username: 'di', displayName: 'Di' });
+  await addBook('di', '777', { title: 'The Starless Sea' });
+  const [t] = (await feedOf('ann')).items.filter(i => i.type === 'trending');
+  assert.strictEqual(t.count, 3);
+  assert.strictEqual(t.audience, 'community');
+  assert.strictEqual(t.book.isbn, '777');
+  assert.ok(!('reactions' in t));
+});
+
+test('bots: hidden from everyone without showBots; visible with it', async () => {
+  addBot('margot');
+  await addBook('bot-margot', '888', { rating: 5 });
+  await call(social, 'PUT', '/books/888/reviews/mine', {
+    caller: 'bot-margot', pathParameters: { isbn: '888' }, body: { rating: 5, text: 'Loved it', book: { title: 'Circe' } }
+  });
+  const reviewsFor = (who) => call(social, 'GET', '/books/888/reviews', { caller: who, pathParameters: { isbn: '888' } }).then(r => r.body);
+  const statsFor = (who) => call(library, 'GET', '/books/888/stats', { caller: who, pathParameters: { isbn: '888' } }).then(r => r.body);
+  const searchFor = (who) => call(friends, 'GET', `/friends/${who}/search`, { caller: who, pathParameters: { userId: who }, query: { q: 'marg' } }).then(r => r.body.users);
+  const botsIn = (feed) => feed.items.filter(i => i.actor?.userId === 'bot-margot').length;
+
+  assert.strictEqual(botsIn(await feedOf('ann')), 0);
+  assert.strictEqual((await reviewsFor('ann')).count, 0);
+  assert.strictEqual((await statsFor('ann')).inLibraries, 0);
+  assert.deepStrictEqual(await searchFor('ann'), []);
+  const botItem = (await call(library, 'GET', '/library/bot-margot/books', { caller: 'bot-margot', pathParameters: { userId: 'bot-margot' } })).status;
+  assert.strictEqual(botItem, 200);
+
+  showBotsTo('ann');
+  assert.ok(botsIn(await feedOf('ann')) > 0);
+  assert.strictEqual((await reviewsFor('ann')).count, 1);
+  assert.strictEqual((await statsFor('ann')).inLibraries, 1);
+  assert.deepStrictEqual((await searchFor('ann')).map(u => u.userId), ['bot-margot']);
+
+  assert.strictEqual(botsIn(await feedOf('bo')), 0, 'other readers still never see bots');
 });
 
 test('recommendations: friends only; appear in the recipient\'s feed with the note', async () => {
