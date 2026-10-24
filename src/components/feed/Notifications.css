@@ -776,3 +776,127 @@
   height: 57px;
   opacity: 0.9;
 }
+
+/* ================================================================ achievement flair */
+
+/* Finished: the book's cover fades in behind the card, strongest on the right */
+.notice.has-art {
+  overflow: hidden;
+}
+
+.notice.has-art > :not(.notice-art) {
+  position: relative;
+  z-index: 1;
+}
+
+.notice-art {
+  position: absolute;
+  inset: -20px;
+  z-index: 0;
+  background-position: center 30%;
+  background-size: cover;
+  filter: blur(7px) saturate(1.3);
+  opacity: 0.6;
+  -webkit-mask-image: linear-gradient(to left, #000 5%, rgba(0, 0, 0, 0.55) 45%, transparent 92%);
+  mask-image: linear-gradient(to left, #000 5%, rgba(0, 0, 0, 0.55) 45%, transparent 92%);
+  pointer-events: none;
+  animation: noticeArtIn 1400ms var(--ease-standard) both;
+  animation-delay: calc(min(var(--i, 0), 8) * 55ms + 250ms);
+}
+
+@keyframes noticeArtIn {
+  from { opacity: 0; transform: scale(1.08); }
+  to { opacity: 0.6; transform: none; }
+}
+
+.notice.has-art .notice-headline {
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+}
+
+.notice.has-art .notice-cover {
+  box-shadow: 0 0 0 1px rgba(201, 166, 107, 0.45), 2px 6px 16px rgba(0, 0, 0, 0.55);
+}
+
+.notice.type-finished_book .notice-kind {
+  color: var(--color-primary);
+}
+
+/* Milestones, streaks, goals and recaps: light rays behind the seal and one
+   shimmer across the card as it arrives */
+.notice.tier-pagebound.form-milestone,
+.notice.tier-pagebound.form-recap {
+  overflow: hidden;
+}
+
+.notice.form-milestone .notice-marker {
+  isolation: isolate;
+}
+
+.notice.form-milestone .notice-marker::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: -1;
+  width: 140px;
+  height: 140px;
+  margin: -70px 0 0 -70px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(rgba(201, 166, 107, 0.16) 0deg 6deg, transparent 6deg 22deg);
+  -webkit-mask-image: radial-gradient(circle, #000 18%, transparent 68%);
+  mask-image: radial-gradient(circle, #000 18%, transparent 68%);
+  animation: noticeRays 40s linear infinite;
+}
+
+@keyframes noticeRays {
+  to { transform: rotate(360deg); }
+}
+
+.notice.tier-pagebound.form-milestone::before,
+.notice.tier-pagebound.form-recap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 236, 196, 0.13) 48%, transparent 61%);
+  transform: translateX(-100%);
+  pointer-events: none;
+  animation: noticeShimmer 1600ms var(--ease-standard) both;
+  animation-delay: calc(min(var(--i, 0), 8) * 55ms + 450ms);
+}
+
+@keyframes noticeShimmer {
+  to { transform: translateX(100%); }
+}
+
+/* Reading goal: a ring around the seal shows how far along you are */
+.notice.has-goal .notice-marker::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: conic-gradient(var(--color-primary) var(--goal), rgba(201, 166, 107, 0.15) 0);
+  -webkit-mask-image: radial-gradient(circle, transparent 62%, #000 64%);
+  mask-image: radial-gradient(circle, transparent 62%, #000 64%);
+}
+
+/* Streak: the flame flickers a few times */
+.notice.type-reading_streak .notice-emblem svg {
+  transform-origin: 50% 90%;
+  animation: noticeFlicker 1.6s ease-in-out 3;
+  animation-delay: 600ms;
+}
+
+@keyframes noticeFlicker {
+  0%, 100% { transform: scale(1) rotate(0); }
+  30% { transform: scale(1.08, 1.14) rotate(-4deg); }
+  60% { transform: scale(0.96, 1.04) rotate(3deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice-art { animation: none; }
+  .notice.form-milestone .notice-marker::before,
+  .notice.type-reading_streak .notice-emblem svg { animation: none; }
+  .notice.tier-pagebound.form-milestone::before,
+  .notice.tier-pagebound.form-recap::before { display: none; }
+}

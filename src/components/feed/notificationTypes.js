@@ -64,8 +64,9 @@ export const TYPES = {
     headline: (i) => <>{who(i)} added {title(i)} to {i.shelf || 'their library'}</>,
     actions: [{ id: 'read_together', label: 'Read together' }]
   },
+  // art: the book's cover fades in behind the card
   finished_book: {
-    tier: 'friend', form: 'status', label: 'Finished', icon: BookCheck, reactable: true,
+    tier: 'friend', form: 'status', label: 'Finished', icon: BookCheck, reactable: true, art: true,
     headline: (i) => <>{who(i)} finished {title(i)}</>
   },
   progress_update: {

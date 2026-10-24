@@ -35,7 +35,7 @@ function App() {
     }
     switch(currentPage) {
       case 'home':
-        return <Home />;
+        return <Home onNavigate={setCurrentPage} />;
       case 'library':
         return <Library onNavigate={setCurrentPage} />;
       case 'sessions':
@@ -54,7 +54,7 @@ function App() {
       case 'admin':
         return <Admin />;
       default:
-        return <Home />;
+        return <Home onNavigate={setCurrentPage} />;
     }
   };
 

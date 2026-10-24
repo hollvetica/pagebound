@@ -1,0 +1,212 @@
+/* Reading sessions as a horizontal row of small covers ("stories") */
+.stories {
+  margin-bottom: var(--space-6);
+}
+
+.stories-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.stories-head h3 {
+  margin-bottom: 0;
+}
+
+.stories-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 16px;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+/* Runs edge to edge on phones, starting in line with the page text */
+.stories-row {
+  display: flex;
+  gap: var(--space-3);
+  margin-inline: calc(-1 * var(--page-gutter));
+  padding: 4px var(--page-gutter) var(--space-2);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: var(--page-gutter);
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.stories-row::-webkit-scrollbar {
+  display: none;
+}
+
+.story {
+  --story-w: 54px;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  width: calc(var(--story-w) + 8px);
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+  scroll-snap-align: start;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The ring: muted by default, brass when there's something new */
+.story-ring {
+  position: relative;
+  display: block;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--color-border);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.story.is-new .story-ring {
+  background: conic-gradient(from 210deg, #e6cc97, var(--color-primary), var(--color-primary-pressed), #e6cc97);
+  box-shadow: 0 0 14px -4px rgba(201, 166, 107, 0.6);
+}
+
+.story:active .story-ring {
+  transform: scale(0.96);
+}
+
+.story:focus-visible {
+  outline: none;
+}
+
+.story:focus-visible .story-ring {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.story-cover {
+  display: block;
+  width: var(--story-w);
+  height: calc(var(--story-w) * 1.5);
+  overflow: hidden;
+  border-radius: 9px;
+  border: 2px solid var(--color-bg);
+  background: var(--color-surface-raised);
+}
+
+.story-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.story-cover-blank,
+.story-cover-start {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-heading);
+  font-size: var(--font-size-xl);
+  color: var(--color-text-tertiary);
+}
+
+.story-start .story-ring {
+  background: none;
+  border: 1px dashed var(--color-border-strong);
+  padding: 2px;
+}
+
+.story-start .story-cover {
+  border: 0;
+  background: var(--color-surface);
+}
+
+.story-start:hover .story-cover-start {
+  color: var(--color-primary);
+}
+
+.story-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-bg);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 14px;
+}
+
+/* Who you're reading with, tucked into the cover's corner */
+.story-faces {
+  position: absolute;
+  left: 7px;
+  bottom: 7px;
+  display: flex;
+}
+
+.story-faces > * + * {
+  margin-left: -6px;
+}
+
+.story-faces .notice-avatar.is-xs {
+  width: 20px;
+  height: 20px;
+  box-shadow: 0 0 0 2px var(--color-bg);
+}
+
+.story-progress {
+  display: block;
+  width: var(--story-w);
+  height: 3px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-raised);
+}
+
+.story-progress span {
+  display: block;
+  height: 100%;
+  background: var(--color-primary);
+}
+
+.story-title {
+  display: -webkit-box;
+  width: 100%;
+  margin-top: 6px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.25;
+  color: var(--color-text);
+}
+
+.story-meta {
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
+.story.is-new .story-meta {
+  color: var(--color-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .story-ring { transition: none; }
+}

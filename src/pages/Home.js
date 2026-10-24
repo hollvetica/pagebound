@@ -5,7 +5,8 @@ import { useFriends } from '../context/FriendsContext';
 import { getFeed, setReaction } from '../utils/socialService';
 import { addBookToLibrary } from '../utils/libraryService';
 import { isPreviewMode } from '../utils/previewMode';
-import ActiveSessions from '../components/ActiveSessions';
+import SessionStories from '../components/SessionStories';
+import Discussion from '../components/Discussion';
 import ActivityFeed from '../components/ActivityFeed';
 import QuickSessionSetup from '../components/QuickSessionSetup';
 import './Home.css';
@@ -17,8 +18,8 @@ const PREVIEW_FEED_KEY = 'pagebound-preview-feed';
 const SAMPLE_FEED_VERSION = 'patterns-3';
 const SAMPLE_VERSION_KEY = 'pagebound-preview-feed-version';
 
-function Home() {
-  const { sessions, createSession } = useSession();
+function Home({ onNavigate }) {
+  const { sessions, createSession, markSeen, refreshSessions } = useSession();
   const { userProfile } = useAuth();
   const { friends } = useFriends();
   const preview = isPreviewMode();
@@ -27,6 +28,7 @@ function Home() {
   const [reactionSet, setReactionSet] = useState(DEFAULT_REACTIONS);
   const [feedLoading, setFeedLoading] = useState(true);
   const [selectedActivity, setSelectedActivity] = useState(null);
+  const [openSession, setOpenSession] = useState(null);
 
   const loadFeed = useCallback(async () => {
     if (preview) {
@@ -100,6 +102,12 @@ function Home() {
     setSelectedActivity(null);
   };
 
+  // A story opens its discussion here; the badge clears once it's open
+  const handleOpenSession = (session) => {
+    setOpenSession(session);
+    if (session.newCount) markSeen(session.id);
+  };
+
   const name = userProfile?.displayName || userProfile?.username || 'reader';
 
   return (
@@ -112,14 +120,11 @@ function Home() {
         </div>
       </div>
 
-      {sessions.length > 0 ? (
-        <ActiveSessions sessions={sessions} />
-      ) : (
-        <div className="no-sessions">
-          <h3>No Active Sessions</h3>
-          <p>Start a reading session from your library or join a friend below!</p>
-        </div>
-      )}
+      <SessionStories
+        sessions={sessions}
+        onOpen={handleOpenSession}
+        onStart={() => onNavigate && onNavigate('library')}
+      />
 
       <ActivityFeed
         items={feed}
@@ -129,6 +134,17 @@ function Home() {
         onSuggestSession={handleSuggestSession}
         onAddToLibrary={handleAddToLibrary}
       />
+
+      {openSession && userProfile && (
+        <Discussion
+          session={openSession}
+          userId={userProfile.userId}
+          onClose={() => {
+            setOpenSession(null);
+            refreshSessions();
+          }}
+        />
+      )}
 
       {selectedActivity && (
         <QuickSessionSetup

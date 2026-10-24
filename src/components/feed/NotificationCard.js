@@ -218,6 +218,9 @@ function NotificationCard({ item, reactionSet = [], onReact, onAction, state = {
   const base = item.type === 'grouped' ? typeFor(item.group.type) : def;
   const Icon = base.icon;
   const showCover = item.book?.coverUrl && !['match', 'milestone', 'recap'].includes(form);
+  const art = def.art && item.book?.coverUrl;
+  // Reading goal: the seal gets a ring showing how far along you are
+  const goal = item.milestone?.target ? Math.min(100, Math.round((item.milestone.value / item.milestone.target) * 100)) : null;
   const actions = community ? (item.book ? [WANT_TO_READ] : []) : def.actions || [];
   const doneAction = actions.find(a => state[a.id] === true);
   const error = Object.values(state).find(v => typeof v === 'string' && v !== 'busy');
@@ -225,10 +228,11 @@ function NotificationCard({ item, reactionSet = [], onReact, onAction, state = {
 
   return (
     <article
-      className={`notice tier-${tier} form-${form} ${still ? 'is-still' : ''}`}
-      style={{ '--i': index }}
+      className={`notice tier-${tier} form-${form} type-${item.type} ${art ? 'has-art' : ''} ${goal != null ? 'has-goal' : ''} ${still ? 'is-still' : ''}`}
+      style={{ '--i': index, ...(goal != null ? { '--goal': `${goal}%` } : {}) }}
       aria-label={`${base.label}${tier === 'direct' ? ', for you' : ''}`}
     >
+      {art && <span className="notice-art" aria-hidden="true" style={{ backgroundImage: `url("${item.book.coverUrl}")` }} />}
       <div className="notice-marker">
         {emblem ? (
           <span className="notice-emblem" aria-hidden="true"><Icon size={form === 'milestone' ? 22 : 17} strokeWidth={1.6} /></span>

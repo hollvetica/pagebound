@@ -21,7 +21,3 @@
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
-
-.home-page .no-sessions {
-  margin-bottom: var(--space-8);
-}
