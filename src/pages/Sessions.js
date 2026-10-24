@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSession } from '../context/SessionContext';
 import { useAuth } from '../context/AuthContext';
 import UpdateProgress from '../components/UpdateProgress';
 import Discussion from '../components/Discussion';
 import ParticipantTimeline from '../components/ParticipantTimeline';
 import { InviteFriendsSheet } from '../components/InviteSheets';
-import { Lock, MessageCircle, UserPlus } from 'lucide-react';
+import { ChevronDown, Lock, MessageCircle, UserPlus } from 'lucide-react';
 import './Sessions.css';
 
-function Sessions() {
+// focusSessionId: open this session and scroll to it (from Home)
+function Sessions({ focusSessionId }) {
   const { sessions, updateMyProgress, refreshSessions, markSeen, deleteSession, leaveSession } = useSession();
   const { userProfile } = useAuth();
   const [showUpdateProgress, setShowUpdateProgress] = useState(false);
@@ -16,6 +17,29 @@ function Sessions() {
   const [selectedSession, setSelectedSession] = useState(null);
   const [invitingTo, setInvitingTo] = useState(null);
   const [actionError, setActionError] = useState(null);
+  // Sessions are collapsed to their header until opened; with only one, it's open
+  const [expanded, setExpanded] = useState(() => new Set(focusSessionId ? [focusSessionId] : []));
+  const [highlighted, setHighlighted] = useState(null);
+
+  const isOpen = (id) => sessions.length === 1 || expanded.has(id);
+  const toggle = (id) => setExpanded(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  // Coming from Home: open that session, bring it into view, flash it briefly
+  const focusReady = !!focusSessionId && sessions.some(s => s.id === focusSessionId);
+  useEffect(() => {
+    if (!focusReady) return undefined;
+    setExpanded(prev => new Set(prev).add(focusSessionId));
+    setHighlighted(focusSessionId);
+    const scroll = setTimeout(() => {
+      document.getElementById(`session-${focusSessionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+    const unflash = setTimeout(() => setHighlighted(null), 1800);
+    return () => { clearTimeout(scroll); clearTimeout(unflash); };
+  }, [focusSessionId, focusReady]);
 
   const handleUpdateProgress = (session) => {
     setSelectedSession(session);
@@ -82,8 +106,24 @@ function Sessions() {
             const unit = session.trackingMode === 'pages' ? 'page' : 'chapter';
 
             return (
-              <div key={session.id} className="session-detail-card">
-                <div className="session-card-header">
+              <div
+                key={session.id}
+                id={`session-${session.id}`}
+                className={`session-detail-card ${isOpen(session.id) ? 'is-open' : 'is-collapsed'} ${highlighted === session.id ? 'is-focused' : ''}`}
+              >
+                <div
+                  className="session-card-header"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isOpen(session.id)}
+                  onClick={() => toggle(session.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggle(session.id);
+                    }
+                  }}
+                >
                   <div className="session-book-cover-large">
                     {session.bookCover ? (
                       <img src={session.bookCover} alt={session.bookTitle} />
@@ -132,8 +172,10 @@ function Sessions() {
                       </div>
                     )}
                   </div>
+                  {sessions.length > 1 && <ChevronDown className="session-chevron" size={18} aria-hidden="true" />}
                 </div>
 
+                {isOpen(session.id) && (<>
                 <div className="participants-section">
                   <h4>Participants</h4>
                   <div className="participants-list">
@@ -179,6 +221,7 @@ function Sessions() {
                     </button>
                   </div>
                 </div>
+                </>)}
               </div>
             );
           })}

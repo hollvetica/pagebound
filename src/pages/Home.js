@@ -6,7 +6,6 @@ import { getFeed, setReaction } from '../utils/socialService';
 import { addBookToLibrary } from '../utils/libraryService';
 import { isPreviewMode } from '../utils/previewMode';
 import SessionStories from '../components/SessionStories';
-import Discussion from '../components/Discussion';
 import ActivityFeed from '../components/ActivityFeed';
 import QuickSessionSetup from '../components/QuickSessionSetup';
 import './Home.css';
@@ -18,8 +17,8 @@ const PREVIEW_FEED_KEY = 'pagebound-preview-feed';
 const SAMPLE_FEED_VERSION = 'patterns-3';
 const SAMPLE_VERSION_KEY = 'pagebound-preview-feed-version';
 
-function Home({ onNavigate }) {
-  const { sessions, createSession, markSeen, refreshSessions } = useSession();
+function Home({ onNavigate, onOpenSession }) {
+  const { sessions, createSession } = useSession();
   const { userProfile } = useAuth();
   const { friends } = useFriends();
   const preview = isPreviewMode();
@@ -28,7 +27,6 @@ function Home({ onNavigate }) {
   const [reactionSet, setReactionSet] = useState(DEFAULT_REACTIONS);
   const [feedLoading, setFeedLoading] = useState(true);
   const [selectedActivity, setSelectedActivity] = useState(null);
-  const [openSession, setOpenSession] = useState(null);
 
   const loadFeed = useCallback(async () => {
     if (preview) {
@@ -102,12 +100,6 @@ function Home({ onNavigate }) {
     setSelectedActivity(null);
   };
 
-  // A story opens its discussion here; the badge clears once it's open
-  const handleOpenSession = (session) => {
-    setOpenSession(session);
-    if (session.newCount) markSeen(session.id);
-  };
-
   const name = userProfile?.displayName || userProfile?.username || 'reader';
 
   return (
@@ -122,7 +114,7 @@ function Home({ onNavigate }) {
 
       <SessionStories
         sessions={sessions}
-        onOpen={handleOpenSession}
+        onOpen={(session) => onOpenSession && onOpenSession(session.id)}
         onStart={() => onNavigate && onNavigate('library')}
       />
 
@@ -134,17 +126,6 @@ function Home({ onNavigate }) {
         onSuggestSession={handleSuggestSession}
         onAddToLibrary={handleAddToLibrary}
       />
-
-      {openSession && userProfile && (
-        <Discussion
-          session={openSession}
-          userId={userProfile.userId}
-          onClose={() => {
-            setOpenSession(null);
-            refreshSessions();
-          }}
-        />
-      )}
 
       {selectedActivity && (
         <QuickSessionSetup

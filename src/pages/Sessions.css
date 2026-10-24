@@ -228,3 +228,49 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Collapsed sessions show just their header; tap to open */
+.session-card-header {
+  position: relative;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+}
+
+.session-card-header:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 4px;
+}
+
+.session-detail-card.is-collapsed .session-card-header {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.session-chevron {
+  flex-shrink: 0;
+  align-self: center;
+  margin-left: auto;
+  color: var(--color-text-tertiary);
+  transition: transform var(--duration-base) var(--ease-standard);
+}
+
+.session-detail-card.is-open .session-chevron {
+  transform: rotate(180deg);
+}
+
+/* Opened from Home: a brief brass glow so you can see which one */
+.session-detail-card {
+  scroll-margin-top: calc(var(--header-height) + var(--space-4));
+  transition: box-shadow 600ms var(--ease-standard), border-color 600ms var(--ease-standard);
+}
+
+.session-detail-card.is-focused {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft), 0 0 28px -6px rgba(201, 166, 107, 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-chevron,
+  .session-detail-card { transition: none; }
+}

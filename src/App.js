@@ -20,6 +20,18 @@ function App() {
   const [currentPage, setCurrentPage] = useState('home');
   const [authPage, setAuthPage] = useState('login'); // 'login', 'signup', or 'reset'
   const [selectedFriendId, setSelectedFriendId] = useState(null);
+  // A session to open on the Sessions tab (from Home's Reading now row)
+  const [focusSessionId, setFocusSessionId] = useState(null);
+
+  const navigate = (page) => {
+    setFocusSessionId(null);
+    setCurrentPage(page);
+  };
+
+  const openSession = (sessionId) => {
+    setFocusSessionId(sessionId);
+    setCurrentPage('sessions');
+  };
   const { user, loading } = useAuth();
 
   const handleViewFriendProfile = (friendId) => {
@@ -35,11 +47,11 @@ function App() {
     }
     switch(currentPage) {
       case 'home':
-        return <Home onNavigate={setCurrentPage} />;
+        return <Home onNavigate={navigate} onOpenSession={openSession} />;
       case 'library':
         return <Library onNavigate={setCurrentPage} />;
       case 'sessions':
-        return <Sessions />;
+        return <Sessions focusSessionId={focusSessionId} />;
       case 'friends':
         return <Friends onNavigateToFriendProfile={handleViewFriendProfile} />;
       case 'friendProfile':
@@ -54,7 +66,7 @@ function App() {
       case 'admin':
         return <Admin />;
       default:
-        return <Home onNavigate={setCurrentPage} />;
+        return <Home onNavigate={navigate} onOpenSession={openSession} />;
     }
   };
 
@@ -114,7 +126,7 @@ function App() {
       
       {/* Only show bottom nav on main pages, not settings/admin/friendProfile */}
       {!['settings', 'admin', 'friendProfile'].includes(currentPage) && (
-        <BottomNav currentPage={currentPage} onNavigate={setCurrentPage} />
+        <BottomNav currentPage={currentPage} onNavigate={navigate} />
       )}
 
       {/* Back button for settings and admin */}

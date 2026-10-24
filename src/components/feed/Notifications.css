@@ -548,6 +548,7 @@
   color: var(--color-text);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
   cursor: pointer;
   transition: var(--transition-fast);
 }
@@ -899,4 +900,94 @@
   .notice.type-reading_streak .notice-emblem svg { animation: none; }
   .notice.tier-pagebound.form-milestone::before,
   .notice.tier-pagebound.form-recap::before { display: none; }
+}
+
+/* ================================================================ big covers */
+/* The book cover runs taller than the card and is cropped by its frame. The
+   time and reactions sit on the cover so the text keeps its full column. */
+.notice.has-cover {
+  --cover-w: 112px;
+  --cover-right: var(--space-3);
+  grid-template-columns: var(--avatar-size-md) minmax(0, 1fr);
+  min-height: 150px;
+  padding-right: calc(var(--cover-w) + var(--cover-right) + var(--space-3));
+  overflow: hidden;
+}
+
+.notice.has-cover .notice-cover {
+  position: absolute;
+  top: 50%;
+  right: var(--cover-right);
+  z-index: 1;
+  width: var(--cover-w);
+  height: calc(var(--cover-w) * 1.5);
+  border-radius: 4px;
+  transform: translateY(-50%) rotate(2deg);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), -6px 8px 22px rgba(0, 0, 0, 0.6);
+  transition: transform var(--duration-base) var(--ease-standard);
+}
+
+.notice.has-cover:hover .notice-cover {
+  transform: translateY(-50%) rotate(0deg) scale(1.02);
+}
+
+.notice.has-art.has-cover .notice-cover {
+  box-shadow: 0 0 0 1px rgba(201, 166, 107, 0.5), -6px 8px 22px rgba(0, 0, 0, 0.6);
+}
+
+/* Time: a small tag in the cover's top corner */
+.notice.has-cover .notice-cover-time {
+  position: absolute;
+  top: var(--space-3);
+  right: calc(var(--cover-right) + 6px);
+  z-index: 2;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  background: rgba(13, 15, 18, 0.78);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+}
+
+.notice.has-cover .notice-cover-time .notice-time {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+/* Reactions: along the cover's bottom edge, on a dark fade */
+.notice.has-cover .notice-cover-reactions {
+  position: absolute;
+  right: var(--cover-right);
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  min-width: var(--cover-w);
+  padding: var(--space-6) 6px var(--space-2);
+  background: linear-gradient(to top, rgba(10, 11, 13, 0.92), rgba(10, 11, 13, 0.55) 55%, transparent);
+  border-radius: 0 0 4px 4px;
+}
+
+.notice.has-cover .notice-cover-reactions .notice-reactions {
+  margin: 0;
+  justify-content: flex-end;
+}
+
+.notice.has-cover .notice-cover-reactions .reaction-chip,
+.notice.has-cover .notice-cover-reactions .reaction-add {
+  background: rgba(13, 15, 18, 0.7);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.notice.has-cover .notice-cover-reactions .reaction-picker {
+  background: var(--color-surface-sunken);
+}
+
+.notice.tier-community.has-cover {
+  --cover-w: 100px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice.has-cover .notice-cover { transition: none; }
 }

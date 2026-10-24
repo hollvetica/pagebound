@@ -33,7 +33,8 @@
   display: flex;
   gap: var(--space-3);
   margin-inline: calc(-1 * var(--page-gutter));
-  padding: 4px var(--page-gutter) var(--space-2);
+  /* Room above and to the right so the badges aren't clipped by the scroller */
+  padding: 10px var(--page-gutter) var(--space-2);
   overflow-x: auto;
   scroll-snap-type: x proximity;
   scroll-padding-inline: var(--page-gutter);
@@ -46,12 +47,12 @@
 }
 
 .story {
-  --story-w: 54px;
+  --story-w: 72px;
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
   align-items: center;
-  width: calc(var(--story-w) + 8px);
+  width: calc(var(--story-w) + 10px);
   padding: 0;
   background: none;
   border: 0;
@@ -150,22 +151,38 @@
   line-height: 14px;
 }
 
-/* Who you're reading with, tucked into the cover's corner */
-.story-faces {
+/* How many people are reading: a group icon with the count on it */
+.story-readers {
   position: absolute;
-  left: 7px;
-  bottom: 7px;
-  display: flex;
+  left: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  background: rgba(13, 15, 18, 0.82);
+  border: 1px solid rgba(201, 166, 107, 0.45);
+  color: var(--color-primary);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
 }
 
-.story-faces > * + * {
-  margin-left: -6px;
-}
-
-.story-faces .notice-avatar.is-xs {
-  width: 20px;
-  height: 20px;
-  box-shadow: 0 0 0 2px var(--color-bg);
+.story-readers-count {
+  position: absolute;
+  top: -6px;
+  right: -7px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: var(--radius-full);
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: 9px;
+  font-weight: var(--font-weight-bold, 700);
+  line-height: 15px;
+  text-align: center;
 }
 
 .story-progress {
@@ -195,16 +212,6 @@
   font-weight: var(--font-weight-semibold);
   line-height: 1.25;
   color: var(--color-text);
-}
-
-.story-meta {
-  margin-top: 2px;
-  font-size: 10px;
-  color: var(--color-text-tertiary);
-}
-
-.story.is-new .story-meta {
-  color: var(--color-primary);
 }
 
 @media (prefers-reduced-motion: reduce) {

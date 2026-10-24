@@ -225,10 +225,12 @@ function NotificationCard({ item, reactionSet = [], onReact, onAction, state = {
   const doneAction = actions.find(a => state[a.id] === true);
   const error = Object.values(state).find(v => typeof v === 'string' && v !== 'busy');
   const emblem = tier === 'pagebound' || tier === 'community' || !item.actor;
+  // With a big cover on the right, the time moves onto the cover
+  const time = <time className="notice-time" dateTime={item.createdAt}>{timeAgo(item.createdAt)}</time>;
 
   return (
     <article
-      className={`notice tier-${tier} form-${form} type-${item.type} ${art ? 'has-art' : ''} ${goal != null ? 'has-goal' : ''} ${still ? 'is-still' : ''}`}
+      className={`notice tier-${tier} form-${form} type-${item.type} ${art ? 'has-art' : ''} ${showCover ? 'has-cover' : ''} ${goal != null ? 'has-goal' : ''} ${still ? 'is-still' : ''}`}
       style={{ '--i': index, ...(goal != null ? { '--goal': `${goal}%` } : {}) }}
       aria-label={`${base.label}${tier === 'direct' ? ', for you' : ''}`}
     >
@@ -249,14 +251,14 @@ function NotificationCard({ item, reactionSet = [], onReact, onAction, state = {
           {tier === 'direct' && <span className="notice-tier-tag">{TIERS.direct.label}</span>}
           {tier === 'community' && <span className="notice-tier-tag">{TIERS.community.label}</span>}
           <span className="notice-kind">{base.label}</span>
-          <time className="notice-time" dateTime={item.createdAt}>{timeAgo(item.createdAt)}</time>
+          {!showCover && time}
         </header>
 
         <p className="notice-headline">{def.headline(item)}</p>
         {item.note && <blockquote className="notice-quote">“{item.note}”</blockquote>}
         <Body item={item} form={form} tier={tier} />
 
-        {(actions.length > 0 || def.reactable) && (
+        {(actions.length > 0 || (def.reactable && !showCover)) && (
           <footer className="notice-footer">
             {actions.length > 0 && onAction && (
               <div className="notice-actions">
@@ -275,13 +277,18 @@ function NotificationCard({ item, reactionSet = [], onReact, onAction, state = {
                 ))}
               </div>
             )}
-            {def.reactable && onReact && <Reactions item={item} reactionSet={reactionSet} onReact={onReact} />}
+            {def.reactable && onReact && !showCover && <Reactions item={item} reactionSet={reactionSet} onReact={onReact} />}
           </footer>
         )}
         {error && <p className="notice-error">{error}</p>}
       </div>
 
       {showCover && <img src={item.book.coverUrl} alt="" className="notice-cover" />}
+      {/* With a big cover, the time and reactions ride on the cover itself */}
+      {showCover && <div className="notice-cover-time">{time}</div>}
+      {showCover && def.reactable && onReact && (
+        <div className="notice-cover-reactions"><Reactions item={item} reactionSet={reactionSet} onReact={onReact} /></div>
+      )}
     </article>
   );
 }
