@@ -72,7 +72,8 @@ ROLE_ARN=arn:aws:iam::${ACCOUNT}:role/pagebound-auth-LambdaExecutionRole-KPBhqCA
 zip_lambda() { # <source .js> <name> -> zip path
   rm -rf "$BUILD_DIR/pkg" && mkdir -p "$BUILD_DIR/pkg"
   cp "$LAMBDA_DIR/$1" "$BUILD_DIR/pkg/index.js"
-  (cd "$BUILD_DIR/pkg" && python -c "import zipfile; z=zipfile.ZipFile('../$2.zip','w',zipfile.ZIP_DEFLATED); z.write('index.js'); z.close()")
+  cp "$LAMBDA_DIR/profiles.js" "$BUILD_DIR/pkg/profiles.js"  # shared by user-api and the sign-up trigger
+  (cd "$BUILD_DIR/pkg" && python -c "import zipfile; z=zipfile.ZipFile('../$2.zip','w',zipfile.ZIP_DEFLATED); z.write('index.js'); z.write('profiles.js'); z.close()")
   echo "$BUILD_DIR/$2.zip"
 }
 

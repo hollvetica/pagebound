@@ -45,9 +45,10 @@ deploy_lambda() {
 
     # Copy source file to index.js (Lambda expects index.handler)
     cp "$SOURCE_FILE" index.js
+    cp "$(dirname "$SOURCE_FILE")/profiles.js" profiles.js  # shared by user-api and the sign-up trigger
 
     # Create ZIP file
-    zip -q deployment.zip index.js
+    zip -q deployment.zip index.js profiles.js
 
     # Update Lambda function code
     aws lambda update-function-code \
@@ -57,7 +58,7 @@ deploy_lambda() {
         > /dev/null
 
     # Clean up
-    rm index.js deployment.zip
+    rm index.js profiles.js deployment.zip
 
     echo "✓ $FUNCTION_NAME deployed successfully"
 }

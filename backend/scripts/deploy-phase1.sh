@@ -31,7 +31,8 @@ zip_lambda() { # <source file> -> zip path (as index.js)
   local src="$1" out="$BUILD_DIR/$(basename "$1" .js).zip"
   rm -rf "$BUILD_DIR/pkg" && mkdir -p "$BUILD_DIR/pkg"
   cp "$src" "$BUILD_DIR/pkg/index.js"
-  (cd "$BUILD_DIR/pkg" && python -c "import zipfile; z=zipfile.ZipFile('../$(basename "$out")','w',zipfile.ZIP_DEFLATED); z.write('index.js'); z.close()")
+  cp "$LAMBDA_DIR/profiles.js" "$BUILD_DIR/pkg/profiles.js"  # shared by user-api and the sign-up trigger
+  (cd "$BUILD_DIR/pkg" && python -c "import zipfile; z=zipfile.ZipFile('../$(basename "$out")','w',zipfile.ZIP_DEFLATED); z.write('index.js'); z.write('profiles.js'); z.close()")
   echo "$out"
 }
 

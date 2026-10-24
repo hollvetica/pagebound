@@ -24,8 +24,9 @@ function Signup({ onNavigateToLogin }) {
       return;
     }
 
-    if (!username.trim()) {
-      setErrorMessage('Username is required');
+    // Same rule as the server (backend/lambda/profiles.js)
+    if (!/^[A-Za-z0-9._]{3,24}$/.test(username.trim())) {
+      setErrorMessage('Usernames are 3–24 letters, numbers, dots or underscores.');
       return;
     }
 
@@ -148,7 +149,12 @@ function Signup({ onNavigateToLogin }) {
               required
               autoComplete="username"
               placeholder="Choose a unique username"
+              maxLength={24}
+              aria-describedby="username-hint"
             />
+            <small id="username-hint" className="form-hint">
+              If it's taken, we'll add a number. You can change it later in Settings.
+            </small>
           </div>
 
           <div className="form-group">

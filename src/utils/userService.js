@@ -34,7 +34,10 @@ export const updateUsername = async (email, newUsername) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ newUsername })
     });
-    if (!response.ok) throw new Error('Failed to update username');
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to update username');
+    }
     return await response.json();
   } catch (error) {
     console.error('Error updating username:', error);

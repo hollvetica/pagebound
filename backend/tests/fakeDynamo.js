@@ -97,6 +97,11 @@ async function send(command) {
     if (input.Limit) items = items.slice(0, input.Limit);
     return { Items: clone(items), Count: items.length };
   }
+  if (command instanceof lib.ScanCommand) {
+    const items = [...t.values()].filter(i =>
+      matches(i, input.FilterExpression, input.ExpressionAttributeNames, input.ExpressionAttributeValues));
+    return { Items: clone(items), Count: items.length };
+  }
   if (command instanceof lib.BatchWriteCommand) {
     Object.entries(input.RequestItems).forEach(([tableName, requests]) => {
       requests.forEach(r => {

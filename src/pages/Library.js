@@ -13,9 +13,9 @@ import {
 } from '../utils/libraryService';
 import { STATUS_SHELVES, booksOnShelf } from '../utils/shelves';
 import { isPreviewMode } from '../utils/previewMode';
+import { readLibraryCache, writeLibraryCache } from '../utils/libraryCache';
 import './Library.css';
 
-const LOCAL_BOOKS_KEY = 'pagebound-library';
 const PREVIEW_SHELVES_KEY = 'pagebound-shelves';
 
 function Library({ onNavigate }) {
@@ -29,35 +29,33 @@ function Library({ onNavigate }) {
   const [shelves, setShelves] = useState(STATUS_SHELVES);
   const [selectedBook, setSelectedBook] = useState(null);
   const [editingShelf, setEditingShelf] = useState(null); // shelf object, 'new', or null
-  const [shelfError, setShelfError] = useState(null);
+  const [libraryError, setLibraryError] = useState(null);
 
   // ---- Load books --------------------------------------------------------
   useEffect(() => {
     const loadLibrary = async () => {
       if (!userId) return;
+      // The server's copy always wins. This device's copy (per account) is only
+      // shown when the server can't be reached, and is never uploaded back.
       try {
         const backendBooks = await getLibraryBooks(userId);
-
-        if (backendBooks.books && backendBooks.books.length > 0) {
-          setMyBooks(backendBooks.books);
-          localStorage.setItem(LOCAL_BOOKS_KEY, JSON.stringify(backendBooks.books));
-        } else {
-          // First-time migration: upload books saved in this browser
-          const localBooks = localStorage.getItem(LOCAL_BOOKS_KEY);
-          if (localBooks) {
-            const parsed = JSON.parse(localBooks);
-            setMyBooks(parsed);
-            await Promise.all(parsed.map((book) => addBookToLibrary(userId, book).catch(() => {})));
-          }
-        }
+        const books = backendBooks.books || [];
+        setMyBooks(books);
+        writeLibraryCache(userId, books);
+        setLibraryError(null);
       } catch (error) {
         console.error('Error loading library:', error);
-        const localBooks = localStorage.getItem(LOCAL_BOOKS_KEY);
-        if (localBooks) setMyBooks(JSON.parse(localBooks));
+        const cached = readLibraryCache(userId);
+        if (cached) setMyBooks(cached);
+        if (!preview) {
+          setLibraryError(cached
+            ? "Couldn't reach Pagebound, so this is the copy saved on this device. Changes may not save until you're back online."
+            : "Couldn't load your library. Check your connection and try again.");
+        }
       }
     };
     loadLibrary();
-  }, [userId]);
+  }, [userId, preview]);
 
   // ---- Load shelves ------------------------------------------------------
   useEffect(() => {
@@ -80,12 +78,20 @@ function Library({ onNavigate }) {
   // ---- Books -------------------------------------------------------------
   const persistBooks = (books) => {
     setMyBooks(books);
-    localStorage.setItem(LOCAL_BOOKS_KEY, JSON.stringify(books));
+    writeLibraryCache(userId, books);
   };
 
-  // Called from search; resolves once the book is on the shelf
+  // Saves show right away; if the server says no, they're undone and the
+  // reader is told, so nothing looks saved that isn't.
+  const undo = (change) => setMyBooks(prev => {
+    const next = change(prev);
+    writeLibraryCache(userId, next);
+    return next;
+  });
+
+  // Called from search; resolves to false if the book couldn't be saved
   const handleAddBook = async (book) => {
-    if (myBooks.find(b => b.isbn === book.isbn)) return;
+    if (myBooks.find(b => b.isbn === book.isbn)) return true;
 
     const newBook = {
       ...book,
@@ -100,23 +106,31 @@ function Library({ onNavigate }) {
     };
 
     persistBooks([...myBooks, newBook]);
-    if (userId && !preview) {
-      try {
-        await addBookToLibrary(userId, newBook);
-      } catch (error) {
-        console.error('Error adding book to backend:', error);
-      }
+    if (preview) return true;
+    try {
+      setLibraryError(null);
+      await addBookToLibrary(userId, newBook);
+      return true;
+    } catch (error) {
+      console.error('Error adding book to backend:', error);
+      if (error.status === 409) return true; // already in the library
+      undo(books => books.filter(b => b.isbn !== newBook.isbn));
+      setLibraryError(`Couldn't add “${book.title}”. Check your connection and try again.`);
+      return false;
     }
   };
 
   const handleUpdateBook = async (updatedBook) => {
+    const previous = myBooks.find(b => b.isbn === updatedBook.isbn);
     persistBooks(myBooks.map((book) => (book.isbn === updatedBook.isbn ? updatedBook : book)));
-    if (userId && !preview) {
-      try {
-        await updateLibraryBook(userId, updatedBook.isbn, updatedBook);
-      } catch (error) {
-        console.error('Error updating book in backend:', error);
-      }
+    if (preview) return;
+    try {
+      setLibraryError(null);
+      await updateLibraryBook(userId, updatedBook.isbn, updatedBook);
+    } catch (error) {
+      console.error('Error updating book in backend:', error);
+      if (previous) undo(books => books.map(b => (b.isbn === previous.isbn ? previous : b)));
+      setLibraryError(`Couldn't save your changes to “${updatedBook.title}”, so they've been undone. Check your connection and try again.`);
     }
   };
 
@@ -138,11 +152,11 @@ function Library({ onNavigate }) {
     saveShelves(shelves.map(s => (s.shelfId === shelf.shelfId ? { ...s, visibility } : s)));
     if (preview) return;
     try {
-      setShelfError(null);
+      setLibraryError(null);
       await updateShelf(userId, shelf.shelfId, { visibility });
     } catch (error) {
       setShelves(previous);
-      setShelfError(`Couldn't update “${shelf.name}”. Please try again.`);
+      setLibraryError(`Couldn't update “${shelf.name}”. Please try again.`);
     }
   };
 
@@ -188,7 +202,7 @@ function Library({ onNavigate }) {
         </button>
       </div>
 
-      {shelfError && <div className="error-message library-shelf-error">{shelfError}</div>}
+      {libraryError && <div className="error-message library-shelf-error" role="alert">{libraryError}</div>}
 
       <div className="library-shelves">
         {visibleShelves.map((shelf) => {

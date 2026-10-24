@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { getCurrentUser, signIn, signUp, signOut, confirmSignUp, resetPassword, confirmResetPassword } from 'aws-amplify/auth';
-import { fetchUserProfile, updateUsername, checkUsernameAvailable } from '../utils/userService';
+import { fetchUserProfile, updateUsername } from '../utils/userService';
 import { uploadAvatar, updateProfile, resizeImageToDataUrl } from '../utils/profileService';
 import { isPreviewMode } from '../utils/previewMode';
 
@@ -52,26 +52,19 @@ export const AuthProvider = ({ children }) => {
     try {
       setError(null);
       
-      // Check if username is available
-      // Skip username check - will validate during signup
-      //const isAvailable = await checkUsernameAvailable(username);
-      //if (!isAvailable) {
-      //  return { success: false, error: 'Username already taken' };
-      //}
-
+      // The chosen username travels with the account; the post-confirmation
+      // trigger creates the profile with it (adding a number if it's taken).
+      // Availability can't be checked here: that needs a signed-in user.
       const { isSignUpComplete, userId, nextStep } = await signUp({
         username: email,
         password,
         options: {
           userAttributes: {
-            email
+            email,
+            'custom:username': username.trim()
           }
         }
       });
-
-      // Create user profile in DynamoDB
-      // User profile will be created by Lambda post-confirmation trigger
-      // await createUserProfile(email, username);
 
       return { 
         success: true, 
@@ -162,13 +155,8 @@ export const AuthProvider = ({ children }) => {
       setError(null);
 
       // Check if username is available
-      const isAvailable = await checkUsernameAvailable(newUsername);
-      if (!isAvailable) {
-        return { success: false, error: 'Username already taken' };
-      }
-
-      // Update username in DynamoDB
-      await updateUsername(user.signInDetails.loginId, newUsername);
+      // The server checks the format and that the name is free
+      await updateUsername(user.signInDetails.loginId, newUsername.trim());
 
       // Refresh user profile
       await checkUser();

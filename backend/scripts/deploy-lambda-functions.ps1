@@ -53,9 +53,11 @@ function Deploy-Lambda {
     try {
         # Copy source file to index.js (Lambda expects index.handler)
         Copy-Item $SourceFile -Destination "index.js" -Force
+        # Shared by user-api and the sign-up trigger
+        Copy-Item (Join-Path (Split-Path $SourceFile) "profiles.js") -Destination "profiles.js" -Force
 
         # Create ZIP file
-        Compress-Archive -Path "index.js" -DestinationPath "deployment.zip" -Force
+        Compress-Archive -Path "index.js", "profiles.js" -DestinationPath "deployment.zip" -Force
 
         # Update Lambda function code
         aws lambda update-function-code `
@@ -65,7 +67,7 @@ function Deploy-Lambda {
             | Out-Null
 
         # Clean up
-        Remove-Item "index.js" -Force
+        Remove-Item "index.js", "profiles.js" -Force
         Remove-Item "deployment.zip" -Force
 
         Write-Host "✓ $FunctionName deployed successfully" -ForegroundColor Green

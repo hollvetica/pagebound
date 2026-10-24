@@ -98,9 +98,10 @@ function BookSearch({ onAddBook, libraryIsbns = new Set() }) {
     setError(null);
   };
 
-  // Adding a book puts it on the shelf and closes the search
+  // Adding a book puts it on the shelf and closes the search. If it couldn't
+  // be saved, the search stays open (the library says why).
   const handleAdd = async (book) => {
-    await onAddBook(book);
+    if ((await onAddBook(book)) === false) return;
     setPreviewBook(null);
     closeSearch();
   };

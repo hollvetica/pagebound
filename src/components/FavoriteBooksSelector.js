@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getLibraryBooks } from '../utils/libraryService';
+import { readLibraryCache } from '../utils/libraryCache';
 import './FavoriteBooksSelector.css';
 
 function FavoriteBooksSelector({ currentSelection, onSave, onCancel }) {
@@ -17,19 +18,13 @@ function FavoriteBooksSelector({ currentSelection, onSave, onCancel }) {
           // Try to load from backend
           const response = await getLibraryBooks(userProfile.userId);
           setLibraryBooks(response.books || []);
-        } else {
-          // Fallback to localStorage if no userId
-          const localBooks = localStorage.getItem('pagebound-library');
-          if (localBooks) {
-            setLibraryBooks(JSON.parse(localBooks));
-          }
         }
       } catch (err) {
         console.error('Error loading library:', err);
-        // Fallback to localStorage
-        const localBooks = localStorage.getItem('pagebound-library');
-        if (localBooks) {
-          setLibraryBooks(JSON.parse(localBooks));
+        // Fall back to this account's copy on this device
+        const cached = readLibraryCache(userProfile?.userId);
+        if (cached) {
+          setLibraryBooks(cached);
         } else {
           setError('Failed to load your library');
         }

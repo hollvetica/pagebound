@@ -559,6 +559,13 @@ p {
   color: var(--color-text-secondary);
 }
 
+/* Help text under a field */
+.form-hint {
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-snug);
+  color: var(--color-text-tertiary);
+}
+
 /* ==========================================================================
    Modals / sheets
    On phones these sit at the bottom of the screen like a native sheet.

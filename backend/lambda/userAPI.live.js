@@ -10,7 +10,8 @@
 //     revoking admin is reserved for the super admin.
 //
 // Routes (all under /users/{proxy+}):
-//   GET  {email}                 own profile
+//   GET  {email}                 own profile (created on the spot if the
+//                                sign-up trigger didn't; see profiles.js)
 //   GET  {email}/stats           own reading stats
 //   PUT  {email}/username        rename
 //   PUT  {email}/profile         { tagline, favoriteBooks, isPrivate }
@@ -20,6 +21,7 @@
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const { DynamoDBDocumentClient, GetCommand, UpdateCommand, ScanCommand, QueryCommand } = require("@aws-sdk/lib-dynamodb");
 const { CognitoIdentityProviderClient, AdminResetUserPasswordCommand } = require("@aws-sdk/client-cognito-identity-provider");
+const { USERNAME_RULE, emailKey, cleanUsername, isUsernameTaken, createProfileIfMissing } = require('./profiles');
 
 const ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const dynamodb = DynamoDBDocumentClient.from(ddbClient);
@@ -69,10 +71,11 @@ const CORS_HEADERS = {
 const finish = (response) => ({ ...response, headers: CORS_HEADERS });
 const sameEmail = (a, b) => (a || '').toLowerCase() === (b || '').toLowerCase();
 
+// Profiles are keyed by lowercase email
 async function getUser(email) {
   const result = await dynamodb.send(new GetCommand({
     TableName: process.env.USERS_TABLE,
-    Key: { email }
+    Key: { email: emailKey(email) }
   }));
   return result.Item || null;
 }
@@ -82,13 +85,14 @@ exports.handler = async (event) => {
 
   const { httpMethod, pathParameters = {}, body } = event;
   const proxy = (pathParameters && pathParameters.proxy) || '';
-  const callerEmail = event.requestContext?.authorizer?.claims?.email;
+  const claims = event.requestContext?.authorizer?.claims || {};
+  const callerEmail = claims.email;
   const segments = proxy.split('/');
   const isAdminList = segments[0] === 'admin';
   const isAdminFlag = segments.length > 1 && segments[segments.length - 1] === 'admin';
   const isUsername = segments.length > 1 && segments[segments.length - 1] === 'username';
   const action = segments.length > 1 ? segments[segments.length - 1] : null;
-  const targetEmail = decodeURIComponent(segments[0] || '');
+  const targetEmail = emailKey(decodeURIComponent(segments[0] || ''));
   const isSelf = sameEmail(targetEmail, callerEmail);
 
   let response;
@@ -99,13 +103,10 @@ exports.handler = async (event) => {
     }
     // Check username availability
     else if (httpMethod === 'GET' && proxy.includes('check-username')) {
-      const username = decodeURIComponent(proxy.split('/').pop());
-      const result = await dynamodb.send(new ScanCommand({
-        TableName: process.env.USERS_TABLE,
-        FilterExpression: 'username = :username',
-        ExpressionAttributeValues: { ':username': username }
-      }));
-      response = json(200, { available: !result.Items || result.Items.length === 0 });
+      const username = cleanUsername(decodeURIComponent(proxy.split('/').pop()));
+      response = json(200, {
+        available: !!username && !(await isUsernameTaken(dynamodb, process.env.USERS_TABLE, username, callerEmail))
+      });
     }
     // Get all users (admin)
     else if (httpMethod === 'GET' && isAdminList) {
@@ -147,33 +148,47 @@ exports.handler = async (event) => {
         });
       }
     }
-    // GET own profile
+    // GET own profile. Safety net: a signed-in reader without a profile (the
+    // sign-up trigger failed or wasn't attached) gets one now.
     else if (httpMethod === 'GET') {
       const email = decodeURIComponent(proxy.split('/')[0] || proxy);
       if (!sameEmail(email, callerEmail)) {
         response = json(403, { error: 'You can only view your own account' });
       } else {
-        const user = await getUser(email);
+        let user = await getUser(email);
+        if (!user && claims.sub) {
+          ({ profile: user } = await createProfileIfMissing(dynamodb, {
+            table: process.env.USERS_TABLE,
+            email: callerEmail,
+            userId: claims.sub,
+            wantedUsername: claims['custom:username']
+          }));
+          console.log('Created missing profile for', claims.sub);
+        }
         response = json(user ? 200 : 404, user || { error: 'Not found' });
       }
     }
     // Update own username
     else if (httpMethod === 'PUT' && isUsername) {
-      const email = decodeURIComponent(proxy.split('/')[0]);
+      const email = emailKey(decodeURIComponent(proxy.split('/')[0]));
       if (!sameEmail(email, callerEmail)) {
         response = json(403, { error: 'You can only rename your own account' });
       } else {
         const { newUsername } = JSON.parse(body || '{}');
-        if (!newUsername || !String(newUsername).trim()) {
-          response = json(400, { error: 'Username is required' });
+        const username = cleanUsername(newUsername);
+        if (!username || username !== String(newUsername).trim()) {
+          response = json(400, { error: USERNAME_RULE });
+        } else if (await isUsernameTaken(dynamodb, process.env.USERS_TABLE, username, email)) {
+          response = json(409, { error: 'That username is taken' });
         } else {
           await dynamodb.send(new UpdateCommand({
             TableName: process.env.USERS_TABLE,
             Key: { email },
             UpdateExpression: 'SET username = :username',
-            ExpressionAttributeValues: { ':username': String(newUsername).trim() }
+            ConditionExpression: 'attribute_exists(email)',
+            ExpressionAttributeValues: { ':username': username }
           }));
-          response = json(200, { message: 'Updated' });
+          response = json(200, { message: 'Updated', username });
         }
       }
     }
@@ -274,7 +289,7 @@ exports.handler = async (event) => {
     }
     // Grant / revoke admin (super admin only)
     else if (httpMethod === 'PUT' && isAdminFlag) {
-      const email = decodeURIComponent(proxy.split('/')[0]);
+      const email = emailKey(decodeURIComponent(proxy.split('/')[0]));
       if (!sameEmail(callerEmail, SUPER_ADMIN_EMAIL)) {
         response = json(403, { error: 'Only the super admin can change admin status' });
       } else if (sameEmail(email, SUPER_ADMIN_EMAIL)) {

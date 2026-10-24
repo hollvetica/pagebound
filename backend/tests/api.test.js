@@ -282,6 +282,118 @@ test('users: own profile only; admin actions restricted', async () => {
   assert.strictEqual(list.status, 403);
 });
 
+// ---------------------------------------------------------------- sign-up profiles
+const trigger = require('../lambda/createUserProfile');
+const usersTable = () => db.table('pagebound-users');
+
+const signUpEvent = (triggerSource, attrs) => ({
+  triggerSource,
+  request: { userAttributes: { sub: 'new-sub', email: 'New.Reader@Test', ...attrs } }
+});
+
+// User API call with full token claims (sub, email, custom:username)
+function callUserApi(method, proxy, { claims, body } = {}) {
+  return userApi.handler({
+    httpMethod: method,
+    path: `/users/${proxy}`,
+    pathParameters: { proxy },
+    body: body ? JSON.stringify(body) : null,
+    requestContext: { authorizer: { claims } }
+  }).then(r => ({ status: r.statusCode, body: JSON.parse(r.body) }));
+}
+
+test('sign-up trigger: creates the profile with the chosen username', async () => {
+  const event = signUpEvent('PostConfirmation_ConfirmSignUp', { 'custom:username': 'Night Owl' });
+  const result = await trigger.handler(event);
+  assert.strictEqual(result, event, 'always hands the event back to Cognito');
+  const profile = usersTable().get('new.reader@test');
+  assert.ok(profile, 'keyed by lowercase email');
+  assert.strictEqual(profile.userId, 'new-sub');
+  assert.strictEqual(profile.username, 'Night_Owl');
+  assert.strictEqual(profile.displayName, 'Night_Owl');
+  assert.strictEqual(profile.isAdmin, false);
+  assert.strictEqual(profile.isPrivate, false);
+});
+
+test('sign-up trigger: a password reset never touches the profile', async () => {
+  usersTable().set('new.reader@test', { email: 'new.reader@test', userId: 'new-sub', username: 'owl', displayName: 'Owl', tagline: 'Hi', avatarUrl: 'x.jpg', isPrivate: true });
+  const before = JSON.stringify(usersTable().get('new.reader@test'));
+  await trigger.handler(signUpEvent('PostConfirmation_ConfirmForgotPassword'));
+  assert.strictEqual(JSON.stringify(usersTable().get('new.reader@test')), before);
+
+  usersTable().delete('new.reader@test');
+  await trigger.handler(signUpEvent('PostConfirmation_ConfirmForgotPassword'));
+  assert.ok(!usersTable().has('new.reader@test'), 'a reset creates nothing either');
+});
+
+test('sign-up trigger: never overwrites an existing profile', async () => {
+  usersTable().set('new.reader@test', { email: 'new.reader@test', userId: 'new-sub', username: 'owl', tagline: 'Keep me' });
+  await trigger.handler(signUpEvent('PostConfirmation_ConfirmSignUp', { 'custom:username': 'different' }));
+  assert.strictEqual(usersTable().get('new.reader@test').tagline, 'Keep me');
+  assert.strictEqual(usersTable().get('new.reader@test').username, 'owl');
+});
+
+test('sign-up trigger: usernames are unique ignoring case, and never come from the email', async () => {
+  await trigger.handler(signUpEvent('PostConfirmation_ConfirmSignUp', { 'custom:username': 'ANN' }));
+  assert.strictEqual(usersTable().get('new.reader@test').username, 'ANN2', 'ann is taken');
+
+  await trigger.handler({ ...signUpEvent('PostConfirmation_ConfirmSignUp'), request: { userAttributes: { sub: 's2', email: 'priya.k@test' } } });
+  const fallback = usersTable().get('priya.k@test').username;
+  assert.match(fallback, /^reader\d+$/);
+  assert.ok(!fallback.includes('priya'));
+
+  await trigger.handler({ ...signUpEvent('PostConfirmation_ConfirmSignUp'), request: { userAttributes: { sub: 's3', email: 'x@test', 'custom:username': '!!' } } });
+  assert.match(usersTable().get('x@test').username, /^reader\d+$/, 'an unusable choice falls back too');
+});
+
+test('sign-up trigger: a database failure still lets the sign-up finish', async () => {
+  const table = process.env.USERS_TABLE;
+  process.env.USERS_TABLE = '';
+  try {
+    const event = signUpEvent('PostConfirmation_ConfirmSignUp');
+    assert.strictEqual(await trigger.handler(event), event);
+  } finally {
+    process.env.USERS_TABLE = table;
+  }
+});
+
+test('users: a signed-in reader without a profile gets one (safety net)', async () => {
+  const claims = { sub: 'wa-sub', email: 'Wa@Test', 'custom:username': 'wanderer' };
+  const first = await callUserApi('GET', 'Wa@Test', { claims });
+  assert.strictEqual(first.status, 200);
+  assert.strictEqual(first.body.username, 'wanderer');
+  assert.strictEqual(first.body.userId, 'wa-sub');
+  assert.ok(usersTable().has('wa@test'));
+
+  const again = await callUserApi('GET', 'wa@test', { claims });
+  assert.strictEqual(again.body.createdAt, first.body.createdAt, 'not recreated');
+  assert.strictEqual(usersTable().size, users.length + 1);
+});
+
+test('users: renames must be valid and free; no profile is created by renaming', async () => {
+  const ann = { sub: 'ann', email: 'ann@test' };
+  usersTable().get('bo@test').username = 'Bookish';
+  const taken = await callUserApi('PUT', 'ann@test/username', { claims: ann, body: { newUsername: 'BOOKISH' } });
+  assert.strictEqual(taken.status, 409);
+  const invalid = await callUserApi('PUT', 'ann@test/username', { claims: ann, body: { newUsername: 'a b!' } });
+  assert.strictEqual(invalid.status, 400);
+  const ok = await callUserApi('PUT', 'ann@test/username', { claims: ann, body: { newUsername: 'Ann.Reads' } });
+  assert.strictEqual(ok.status, 200);
+  assert.strictEqual(usersTable().get('ann@test').username, 'Ann.Reads');
+  const ownCase = await callUserApi('PUT', 'ann@test/username', { claims: ann, body: { newUsername: 'ann.reads' } });
+  assert.strictEqual(ownCase.status, 200, 'changing the case of your own name is fine');
+
+  const ghost = { sub: 'ghost', email: 'ghost@test' };
+  const missing = await callUserApi('PUT', 'ghost@test/username', { claims: ghost, body: { newUsername: 'ghosty' } });
+  assert.notStrictEqual(missing.status, 200);
+  assert.ok(!usersTable().has('ghost@test'), 'no half-empty profile');
+
+  const check = (name) => callUserApi('GET', `check-username/${name}`, { claims: ann }).then(r => r.body.available);
+  assert.strictEqual(await check('bookish'), false, 'taken, ignoring case');
+  assert.strictEqual(await check('somebody_new'), true);
+  assert.strictEqual(await check('x'), false, 'too short');
+});
+
 // ---------------------------------------------------------------- shelves
 const shelvesPath = (who) => ({ path: `/library/${who}/shelves`, pathParameters: { userId: who } });
 
